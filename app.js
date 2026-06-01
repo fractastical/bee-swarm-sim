@@ -42,6 +42,8 @@
     danceTempo: 0.65,
     danceInfluence: 0.52,
     danceDuration: 10,
+    followerRunsMean: 2.6,
+    distanceNonlinearity: 0.35,
     trembleSensitivity: 0.68,
     stopInfluence: 0.62,
     shakeInfluence: 0.54,
@@ -66,6 +68,8 @@
     danceTempo: { cast: Number, fmt: v => `${Number(v).toFixed(2)}×` },
     danceInfluence: { cast: Number, fmt: v => Number(v).toFixed(2) },
     danceDuration: { cast: Number, fmt: v => `${Number(v).toFixed(1)} s` },
+    followerRunsMean: { cast: Number, fmt: v => `${Number(v).toFixed(1)} runs` },
+    distanceNonlinearity: { cast: Number, fmt: v => Number(v).toFixed(2) },
     scoutFrac: { cast: Number, fmt: v => `${Math.round(v * 100)}%` },
     scentRadius: { cast: Number, fmt: v => `${Math.round(v)} px` },
     trailFade: { cast: Number, fmt: v => Number(v).toFixed(3) }
@@ -97,9 +101,10 @@
   const state = {
     bees: [], flowers: [], time: 0, running: true, delivered: 0, flowerVisits: 0,
     danceHistory: [], recruitEvents: [], efficiencySamples: [], pathSamples: [], deliveryEvents: [],
-    signalEvents: [],
+    signalEvents: [], infoRateHistory: [], infoBitsHistory: [],
     lastMetrics: 0, lastHeat: 0, fps: 60, lastFrame: performance.now(), contacts: 0,
     tuning: false, tune: { lastTime: 0, rewardAtLast: 0, bestReward: 0, lastMutation: null, phase: 'manual' },
+    disturbance: { active: false, type: '', until: 0, intensity: 1, cooldownUntil: 0 },
     view: { showHiveZoom: true, hiveZoom: 2.5 },
     trace: { active: false, frames: [], idx: 0, accum: 0, dt: 1 / 30, meta: {} }
   };
@@ -113,11 +118,12 @@
   const trails = document.createElement('canvas');
   trails.width = WORLD.w; trails.height = WORLD.h;
   const tctx = trails.getContext('2d');
+  let tooltipEl = null;
 
   function applyWorldScale(nextScale) {
     const prevW = WORLD.w;
     const prevH = WORLD.h;
-    cfg.worldScale = clamp(nextScale, 1, 2.4);
+    cfg.worldScale = clamp(nextScale, 1, 10);
     WORLD.w = Math.round(BASE_WORLD.w * cfg.worldScale);
     WORLD.h = Math.round(BASE_WORLD.h * cfg.worldScale);
     const sx = WORLD.w / Math.max(1, prevW);
@@ -222,6 +228,12 @@
     state.trace.idx = 0;
     state.trace.accum = 0;
     state.signalEvents = [];
+    state.infoRateHistory = [];
+    state.infoBitsHistory = [];
+    state.disturbance.active = false;
+    state.disturbance.type = '';
+    state.disturbance.until = 0;
+    state.disturbance.intensity = 1;
     const first = state.trace.frames[0];
     if (first) applyTraceFrame(first);
     clearTrails();
@@ -322,7 +334,12 @@
     state.bees = [];
     state.time = 0; state.delivered = 0; state.flowerVisits = 0;
     state.danceHistory = []; state.recruitEvents = []; state.efficiencySamples = [];
-    state.pathSamples = []; state.deliveryEvents = []; state.signalEvents = []; state.contacts = 0;
+    state.pathSamples = []; state.deliveryEvents = []; state.signalEvents = [];
+    state.infoRateHistory = []; state.infoBitsHistory = []; state.contacts = 0;
+    state.disturbance.active = false;
+    state.disturbance.type = '';
+    state.disturbance.until = 0;
+    state.disturbance.intensity = 1;
     state.tune.lastTime = 0; state.tune.rewardAtLast = 0; state.tune.bestReward = 0; state.tune.lastMutation = null;
     if (!keepConfig) randomizeConfig();
     applyWorldScale(cfg.worldScale);
@@ -342,6 +359,8 @@
     cfg.beeSpeed = randRange(65, 105);
     cfg.nectarRegen = randRange(0.12, 0.55);
     cfg.danceDuration = randRange(7, 16);
+    cfg.followerRunsMean = randRange(1.6, 3.8);
+    cfg.distanceNonlinearity = randRange(0.05, 0.85);
     cfg.flowerCount = Math.round(randRange(2, 5));
     applyWorldScale(cfg.worldScale);
     syncControlsFromCfg();
@@ -394,6 +413,7 @@
     };
     el('resetBtn').onclick = () => resetSimulation(true);
     el('randomizeBtn').onclick = () => { randomizeConfig(); resetSimulation(true); };
+    el('disturbBtn').onclick = () => injectDisturbance();
     el('clearBtn').onclick = clearTrails;
     el('tuneBtn').onclick = () => toggleTuner();
     el('exportBtn').onclick = exportResults;
@@ -433,11 +453,106 @@
     });
   }
 
+  function setupTooltips() {
+    tooltipEl = document.createElement('div');
+    tooltipEl.className = 'app-tooltip';
+    document.body.appendChild(tooltipEl);
+
+    const targets = Array.from(document.querySelectorAll('[title]'));
+    for (const node of targets) {
+      const txt = node.getAttribute('title');
+      if (!txt) continue;
+      node.setAttribute('data-tooltip', txt);
+      node.removeAttribute('title');
+      node.addEventListener('mouseenter', e => showTooltip(e.currentTarget, null));
+      node.addEventListener('mouseleave', hideTooltip);
+      node.addEventListener('mousemove', e => showTooltip(e.currentTarget, e));
+      node.addEventListener('focus', e => showTooltip(e.currentTarget, null), true);
+      node.addEventListener('blur', hideTooltip, true);
+    }
+  }
+
+  function showTooltip(target, mouseEvent) {
+    if (!tooltipEl) return;
+    const txt = target.getAttribute('data-tooltip');
+    if (!txt) return;
+    tooltipEl.textContent = txt;
+    tooltipEl.style.display = 'block';
+    const pad = 12;
+    const tipRect = tooltipEl.getBoundingClientRect();
+    let x;
+    let y;
+    if (mouseEvent) {
+      x = mouseEvent.clientX + 14;
+      y = mouseEvent.clientY + 14;
+    } else {
+      const r = target.getBoundingClientRect();
+      x = r.left + r.width * 0.5 - tipRect.width * 0.5;
+      y = r.bottom + 8;
+    }
+    if (x + tipRect.width > window.innerWidth - pad) x = window.innerWidth - tipRect.width - pad;
+    if (x < pad) x = pad;
+    if (y + tipRect.height > window.innerHeight - pad) y = Math.max(pad, y - tipRect.height - 22);
+    tooltipEl.style.left = `${x}px`;
+    tooltipEl.style.top = `${y}px`;
+  }
+
+  function hideTooltip() {
+    if (!tooltipEl) return;
+    tooltipEl.style.display = 'none';
+  }
+
   function setRunning(v) {
     state.running = v;
     el('pauseBtn').textContent = v ? 'Pause Simulation' : 'Resume Simulation';
     el('runText').textContent = v ? 'Running' : 'Paused';
     el('runDot').classList.toggle('paused', !v);
+  }
+
+  function disturbanceProfile() {
+    if (!state.disturbance.active || state.time >= state.disturbance.until) return null;
+    const tRemain = Math.max(0, state.disturbance.until - state.time);
+    const ramp = clamp(tRemain / 6, 0.2, 1);
+    if (state.disturbance.type === 'predator') {
+      return {
+        name: 'predator pressure',
+        scentMul: 0.55 + 0.15 * ramp,
+        listenMul: 0.62 + 0.1 * ramp,
+        noiseMul: 1.35 + 0.35 * ramp,
+        recruitMul: 0.48 + 0.15 * ramp,
+        confidenceDrain: 0.005 * ramp,
+        jitter: 0.4 * ramp
+      };
+    }
+    return {
+      name: 'storm',
+      scentMul: 0.45 + 0.2 * ramp,
+      listenMul: 0.5 + 0.15 * ramp,
+      noiseMul: 1.65 + 0.55 * ramp,
+      recruitMul: 0.38 + 0.2 * ramp,
+      confidenceDrain: 0.0075 * ramp,
+      jitter: 0.65 * ramp
+    };
+  }
+
+  function injectDisturbance() {
+    if (state.disturbance.active) {
+      el('tunerReadout').textContent = `Disturbance already active (${disturbanceProfile()?.name || state.disturbance.type}).`;
+      return;
+    }
+    if (state.time < state.disturbance.cooldownUntil) {
+      const wait = Math.max(1, Math.ceil(state.disturbance.cooldownUntil - state.time));
+      el('tunerReadout').textContent = `Disturbance cooldown: wait ${wait}s before injecting again.`;
+      return;
+    }
+    const type = Math.random() < 0.5 ? 'storm' : 'predator';
+    const duration = type === 'storm' ? randRange(26, 40) : randRange(18, 32);
+    state.disturbance.active = true;
+    state.disturbance.type = type;
+    state.disturbance.until = state.time + duration;
+    state.disturbance.intensity = randRange(0.9, 1.35);
+    state.disturbance.cooldownUntil = state.disturbance.until + 10;
+    el('tunerReadout').textContent = `Injected ${type} disturbance for ~${Math.round(duration)}s (coherence stress test).`;
   }
 
   function toggleTuner() {
@@ -476,7 +591,8 @@
 
   function nearestFlowerByScent(b) {
     let best = null, bestScore = 0;
-    const radius = cfg.scentRadius;
+    const disturbance = disturbanceProfile();
+    const radius = cfg.scentRadius * (disturbance ? disturbance.scentMul : 1);
     for (const f of state.flowers) {
       if (f.nectar <= 1) continue;
       const dx = f.x - b.x, dy = f.y - b.y;
@@ -491,25 +607,48 @@
   }
 
   function chooseDanceSignal(b) {
+    const disturbance = disturbanceProfile();
+    const listenRadius = cfg.listenRadius * (disturbance ? disturbance.listenMul : 1);
     let best = null, bestScore = 0;
     for (const d of state.bees) {
       if (d.state !== 'dance' || !d.memory) continue;
       const dx = (d.danceBaseX || d.x) - b.x, dy = (d.danceBaseY || d.y) - b.y;
       const dd = hypot(dx, dy);
-      if (dd > cfg.listenRadius) continue;
+      if (dd > listenRadius) continue;
       const distance = hypot(d.memory.x - hive.x, d.memory.y - hive.y);
       const agePenalty = clamp(d.danceT / Math.max(1, cfg.danceDuration), 0.1, 1.0);
-      const quality = clamp((d.memory.quality || 0.5) * agePenalty * (1 - dd / cfg.listenRadius), 0, 1);
+      const quality = clamp((d.memory.quality || 0.5) * agePenalty * (1 - dd / listenRadius), 0, 1);
       if (quality > bestScore) { best = d; bestScore = quality; }
     }
     return best ? { dancer: best, score: bestScore } : null;
   }
 
-  function setTargetFromMemory(b, mem, source) {
+  function sampleFollowerRuns(quality = 0.5) {
+    const weightedMean = clamp(cfg.followerRunsMean * (0.78 + 0.5 * quality), 1, 5);
+    return Math.round(clamp(weightedMean + randn() * 0.85, 1, 5));
+  }
+
+  function calibratedDanceDistance(trueDist) {
+    const rel = clamp(trueDist / Math.max(1, hypot(WORLD.w, WORLD.h)), 0, 1);
+    const curve = rel * rel - 0.12 * rel;
+    const gain = 1 + cfg.distanceNonlinearity * curve * 0.6;
+    return trueDist * clamp(gain, 0.75, 1.85);
+  }
+
+  function setTargetFromMemory(b, mem, source, danceRunsSampled = null) {
+    const disturbance = disturbanceProfile();
+    const noiseMul = disturbance ? disturbance.noiseMul * state.disturbance.intensity : 1;
     const trueAngle = Math.atan2(mem.y - hive.y, mem.x - hive.x);
     const trueDist = hypot(mem.x - hive.x, mem.y - hive.y);
-    const angle = trueAngle + randn() * cfg.noise * (source === 'dance' ? 1.2 : 0.55);
-    const noisyDist = trueDist * clamp(1 + randn() * cfg.noise * 0.42, 0.45, 1.7);
+    const sampledRuns = source === 'dance'
+      ? Math.max(1, Math.round(danceRunsSampled ?? sampleFollowerRuns(mem.quality || 0.5)))
+      : 1;
+    const decodeGain = source === 'dance' ? (1 / Math.sqrt(sampledRuns)) : 1;
+    const decodedDist = source === 'dance' ? calibratedDanceDistance(trueDist) : trueDist;
+    const angleNoise = cfg.noise * noiseMul * (source === 'dance' ? 1.2 * decodeGain : 0.55);
+    const distNoise = cfg.noise * noiseMul * 0.42 * (source === 'dance' ? decodeGain : 0.9);
+    const angle = trueAngle + randn() * angleNoise;
+    const noisyDist = decodedDist * clamp(1 + randn() * distNoise, 0.45, 1.7);
     const tx = clamp(hive.x + Math.cos(angle) * noisyDist, 60, WORLD.w - 50);
     const ty = clamp(hive.y + Math.sin(angle) * noisyDist, 45, WORLD.h - 45);
     b.target = { x: tx, y: ty, quality: mem.quality || 0.5 };
@@ -517,7 +656,7 @@
     b.source = source;
     b.state = 'outbound'; b.role = source === 'dance' ? 'recruit' : 'forager'; b.carrying = 0;
     b.pathLen = 0; b.optimalDist = trueDist * 2; b.failTimer = 0; b.recruitedAt = source === 'dance' ? state.time : b.recruitedAt;
-    if (source === 'dance') state.recruitEvents.push({ t: state.time, type: 'attempt' });
+    if (source === 'dance') state.recruitEvents.push({ t: state.time, type: 'attempt', runsSampled: sampledRuns });
   }
 
   function startScout(b) {
@@ -630,6 +769,8 @@
     const wasOutside = !inHive(b);
 
     if (b.state === 'idle') {
+      const disturbance = disturbanceProfile();
+      const recruitMul = disturbance ? disturbance.recruitMul : 1;
       b.wait -= dt;
       const d = hypot(b.x - hive.x, b.y - hive.y);
       const targetA = Math.atan2(b.y - hive.y, b.x - hive.x) + Math.PI + randn() * 0.8;
@@ -640,8 +781,9 @@
         b.vy = lerp(b.vy, Math.sin(b.heading) * cfg.beeSpeed * 0.14, dt * 2.6);
       }
       const signal = chooseDanceSignal(b);
-      if (signal && Math.random() < cfg.danceInfluence * signal.score * dt * 1.6) {
-        setTargetFromMemory(b, signal.dancer.memory, 'dance');
+      if (signal && Math.random() < cfg.danceInfluence * signal.score * recruitMul * dt * 1.6) {
+        const sampledRuns = sampleFollowerRuns(signal.dancer.memory?.quality || signal.score || 0.5);
+        setTargetFromMemory(b, signal.dancer.memory, 'dance', sampledRuns);
       } else if (b.wait <= 0) {
         b.wait = randRange(2.5, 9);
         if (b.memory && Math.random() > cfg.scoutFrac) setTargetFromMemory(b, b.memory, 'memory');
@@ -826,11 +968,27 @@
 
   function simulate(rawDt) {
     const dt = clamp(rawDt, 0.001, 0.05) * cfg.simSpeed;
+    let disturbance = disturbanceProfile();
     ensureBeeCount();
     state.time += dt; state.contacts = 0;
+    if (state.disturbance.active && state.time >= state.disturbance.until) {
+      state.disturbance.active = false;
+      state.disturbance.type = '';
+      state.disturbance.until = 0;
+      state.disturbance.intensity = 1;
+      disturbance = null;
+      el('tunerReadout').textContent = 'Disturbance ended. Colony recovering under normal conditions.';
+    }
     for (const f of state.flowers) {
       f.nectar = Math.min(f.cap, f.nectar + cfg.nectarRegen * dt * 4.5);
-      f.confidence = Math.max(0.02, f.confidence - dt * 0.0015);
+      const extraDrain = disturbance ? disturbance.confidenceDrain * state.disturbance.intensity : 0;
+      f.confidence = Math.max(0.02, f.confidence - dt * (0.0015 + extraDrain));
+    }
+    if (disturbance) {
+      for (const b of state.bees) {
+        if (b.state === 'dance' || inHive(b)) continue;
+        b.heading += randn() * disturbance.jitter * state.disturbance.intensity * dt;
+      }
     }
     fadeTrails(dt);
     pruneEvents();
@@ -848,6 +1006,8 @@
     state.efficiencySamples = state.efficiencySamples.filter(e => e.t >= horizon);
     state.pathSamples = state.pathSamples.filter(e => e.t >= horizon);
     state.signalEvents = state.signalEvents.filter(e => e.t >= horizon);
+    state.infoRateHistory = state.infoRateHistory.filter(e => e.t >= horizon);
+    state.infoBitsHistory = state.infoBitsHistory.filter(e => e.t >= horizon);
   }
 
   function reward() {
@@ -898,6 +1058,22 @@
     return -(x * log2(x) + (1 - x) * log2(1 - x));
   };
 
+  function recordInfoSample(history, t, v) {
+    const last = history[history.length - 1];
+    if (!last || t > last.t + 0.2) history.push({ t, v });
+    else last.v = v;
+  }
+
+  function recentSeriesMax(history, windowSec = 120) {
+    const tMin = state.time - windowSec;
+    let maxV = 0;
+    for (const p of history) {
+      if (p.t < tMin) continue;
+      if (p.v > maxV) maxV = p.v;
+    }
+    return maxV;
+  }
+
   function infoModelSpec() {
     return INFO_MODEL_SPECS[cfg.infoModel] || INFO_MODEL_SPECS.heuristic;
   }
@@ -922,6 +1098,9 @@
 
   function estimateWorldModelBits() {
     const spec = infoModelSpec();
+    const followerDecodeRuns = cfg.infoModel === 'citation'
+      ? clamp(cfg.followerRunsMean, 1, 5)
+      : spec.followerRunsToDecode;
     if (cfg.infoModel === 'heuristic') {
       const cellsX = Math.max(1, Math.floor(WORLD.w / 24));
       const cellsY = Math.max(1, Math.floor(WORLD.h / 24));
@@ -946,12 +1125,15 @@
       bits += entropy01(knownProb);
     }
     const informedBees = state.bees.filter(b => b.memory && (b.state === 'dance' || b.state === 'outbound' || b.state === 'return')).length;
-    bits += informedBees * (payloadBits / spec.followerRunsToDecode);
+    bits += informedBees * (payloadBits / followerDecodeRuns);
     return bits;
   }
 
   function estimateTransferRateBitsPerSec() {
     const spec = infoModelSpec();
+    const followerDecodeRuns = cfg.infoModel === 'citation'
+      ? clamp(cfg.followerRunsMean, 1, 5)
+      : spec.followerRunsToDecode;
     const dancers = state.bees.filter(b => b.state === 'dance' && b.memory);
     if (!dancers.length) return 0;
     let transfer = 0;
@@ -972,7 +1154,7 @@
       }
       const agePenalty = clamp(d.danceT / Math.max(1, cfg.danceDuration), 0.15, 1);
       const audienceGain = clamp(0.22 + nearbyListeners * 0.17, 0.22, 2.8);
-      const decodeGain = cfg.infoModel === 'heuristic' ? 1 : (1 / spec.followerRunsToDecode);
+      const decodeGain = cfg.infoModel === 'heuristic' ? 1 : (1 / followerDecodeRuns);
       transfer += bitsPerCycle * cyclesPerSec * agePenalty * audienceGain * cfg.danceInfluence * decodeGain;
     }
     return transfer;
@@ -1319,12 +1501,64 @@
     }
   }
   function drawNectarMini(c,w,h) {
-    c.globalCompositeOperation = 'lighter';
-    for (const f of state.flowers) {
-      const p = mapMini(f.x,f.y,w,h); const q = f.nectar/f.cap;
-      radial(c,p.x,p.y,h*.38,[[0,`hsla(${f.hue},100%,62%,${0.18+q*.36})`],[.45,`hsla(${f.hue},90%,45%,${0.10+q*.18})`],[1,'rgba(0,0,0,0)']]);
+    const padX = 12, padY = 8;
+    const chartW = Math.max(1, w - padX * 2);
+    const chartH = Math.max(1, h - padY * 2);
+    const windowSec = 120;
+    const tMin = state.time - windowSec;
+    const samples = state.infoRateHistory.filter(p => p.t >= tMin);
+    const maxV = Math.max(1, recentSeriesMax(state.infoRateHistory, windowSec) * 1.08);
+
+    c.strokeStyle = 'rgba(96,118,148,0.35)';
+    c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padY + (chartH * i) / 4;
+      c.beginPath();
+      c.moveTo(padX, y);
+      c.lineTo(padX + chartW, y);
+      c.stroke();
     }
-    const H = mapMini(hive.x,hive.y,w,h); radial(c,H.x,H.y,h*.25,[[0,'rgba(70,230,240,.18)'],[1,'rgba(0,0,0,0)']]);
+    c.strokeStyle = 'rgba(150,175,210,0.5)';
+    c.strokeRect(padX, padY, chartW, chartH);
+
+    if (samples.length >= 2) {
+      c.save();
+      c.beginPath();
+      c.rect(padX, padY, chartW, chartH);
+      c.clip();
+
+      c.beginPath();
+      for (let i = 0; i < samples.length; i++) {
+        const p = samples[i];
+        const x = padX + ((p.t - tMin) / windowSec) * chartW;
+        const y = padY + chartH - (p.v / maxV) * chartH;
+        if (i) c.lineTo(x, y); else c.moveTo(x, y);
+      }
+      const gradient = c.createLinearGradient(0, padY, 0, padY + chartH);
+      gradient.addColorStop(0, 'rgba(246,194,58,0.38)');
+      gradient.addColorStop(1, 'rgba(28,199,212,0.10)');
+      c.lineTo(padX + chartW, padY + chartH);
+      c.lineTo(padX, padY + chartH);
+      c.closePath();
+      c.fillStyle = gradient;
+      c.fill();
+
+      c.beginPath();
+      for (let i = 0; i < samples.length; i++) {
+        const p = samples[i];
+        const x = padX + ((p.t - tMin) / windowSec) * chartW;
+        const y = padY + chartH - (p.v / maxV) * chartH;
+        if (i) c.lineTo(x, y); else c.moveTo(x, y);
+      }
+      c.strokeStyle = 'rgba(246,194,58,0.95)';
+      c.lineWidth = 1.8;
+      c.stroke();
+      c.restore();
+    }
+
+    c.fillStyle = 'rgba(216,225,238,.80)';
+    c.font = '10px ui-sans-serif, system-ui';
+    c.fillText(fmtBitRate(samples.length ? samples[samples.length - 1].v : 0), 12, 13);
   }
   function drawDanceMini(c,w,h) {
     const H = mapMini(hive.x,hive.y,w,h); c.globalCompositeOperation='lighter';
@@ -1338,15 +1572,64 @@
     }
   }
   function drawBuzzMini(c,w,h) {
-    const H = mapMini(hive.x,hive.y,w,h); c.globalCompositeOperation='lighter';
-    radial(c,H.x,H.y,h*.42,[[0,'rgba(88,230,230,.22)'],[1,'rgba(0,0,0,0)']]);
-    const amp = 0.45 + Math.min(1, state.bees.filter(b=>b.state==='dance').length/24);
-    for (let i=0;i<18;i++) {
-      const r = (i/18)*Math.max(w,h)*0.75 + (state.time*18 % 18);
-      c.strokeStyle = `hsla(${185+i*5},95%,60%,${0.10*amp*(1-i/24)})`;
-      c.beginPath(); c.arc(H.x,H.y,r,0,TAU); c.stroke();
+    const padX = 12, padY = 8;
+    const chartW = Math.max(1, w - padX * 2);
+    const chartH = Math.max(1, h - padY * 2);
+    const windowSec = 120;
+    const tMin = state.time - windowSec;
+    const samples = state.infoBitsHistory.filter(p => p.t >= tMin);
+    const maxV = Math.max(1, recentSeriesMax(state.infoBitsHistory, windowSec) * 1.08);
+
+    c.strokeStyle = 'rgba(96,118,148,0.35)';
+    c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padY + (chartH * i) / 4;
+      c.beginPath();
+      c.moveTo(padX, y);
+      c.lineTo(padX + chartW, y);
+      c.stroke();
     }
-    for (const f of state.flowers) { const p=mapMini(f.x,f.y,w,h); radial(c,p.x,p.y,h*.18,[[0,'rgba(246,194,58,.36)'],[1,'rgba(0,0,0,0)']]); }
+    c.strokeStyle = 'rgba(150,175,210,0.5)';
+    c.strokeRect(padX, padY, chartW, chartH);
+
+    if (samples.length >= 2) {
+      c.save();
+      c.beginPath();
+      c.rect(padX, padY, chartW, chartH);
+      c.clip();
+
+      c.beginPath();
+      for (let i = 0; i < samples.length; i++) {
+        const p = samples[i];
+        const x = padX + ((p.t - tMin) / windowSec) * chartW;
+        const y = padY + chartH - (p.v / maxV) * chartH;
+        if (i) c.lineTo(x, y); else c.moveTo(x, y);
+      }
+      const gradient = c.createLinearGradient(0, padY, 0, padY + chartH);
+      gradient.addColorStop(0, 'rgba(178,115,255,0.34)');
+      gradient.addColorStop(1, 'rgba(26,92,255,0.08)');
+      c.lineTo(padX + chartW, padY + chartH);
+      c.lineTo(padX, padY + chartH);
+      c.closePath();
+      c.fillStyle = gradient;
+      c.fill();
+
+      c.beginPath();
+      for (let i = 0; i < samples.length; i++) {
+        const p = samples[i];
+        const x = padX + ((p.t - tMin) / windowSec) * chartW;
+        const y = padY + chartH - (p.v / maxV) * chartH;
+        if (i) c.lineTo(x, y); else c.moveTo(x, y);
+      }
+      c.strokeStyle = 'rgba(178,115,255,0.95)';
+      c.lineWidth = 1.8;
+      c.stroke();
+      c.restore();
+    }
+
+    c.fillStyle = 'rgba(216,225,238,.80)';
+    c.font = '10px ui-sans-serif, system-ui';
+    c.fillText(fmtBits(samples.length ? samples[samples.length - 1].v : 0), 12, 13);
   }
   function drawCoherenceMini(c,w,h) {
     c.globalCompositeOperation='lighter';
@@ -1382,7 +1665,19 @@
     if (kind==='phero' || kind==='dance') { g.addColorStop(.35,'#a028c9'); g.addColorStop(.75,'#ff7b2c'); }
     c.fillStyle=g; c.fillRect(x,y,bw,bh);
     c.fillStyle='rgba(220,228,240,.75)'; c.font='10px ui-sans-serif, system-ui';
-    c.fillText(kind==='nectar'?'Low':'0.0',x,y-4); c.fillText(kind==='nectar'?'High':'1.0',x+bw-22,y-4);
+    if (kind === 'nectar') {
+      c.fillText('0 b/s', x, y - 4);
+      const hi = fmtBitRate(recentSeriesMax(state.infoRateHistory, 120));
+      c.fillText(hi, x + bw - c.measureText(hi).width, y - 4);
+      return;
+    }
+    if (kind === 'buzz') {
+      c.fillText('0 b', x, y - 4);
+      const hi = fmtBits(recentSeriesMax(state.infoBitsHistory, 120));
+      c.fillText(hi, x + bw - c.measureText(hi).width, y - 4);
+      return;
+    }
+    c.fillText('0.0',x,y-4); c.fillText('1.0',x+bw-22,y-4);
   }
 
   function updateMetrics(force = false) {
@@ -1402,6 +1697,7 @@
     const recentRecruit = state.recruitEvents.filter(e=>e.t > state.time - 60);
     const attempts = recentRecruit.filter(e=>e.type==='attempt').length;
     const succ = recentRecruit.filter(e=>e.type==='success').length;
+    const failedRecruit = Math.max(0, attempts - succ);
     const recentSignals = state.signalEvents.filter(e => e.t > state.time - 60);
     const trembleSignals = recentSignals.filter(e => e.type === 'tremble').length;
     const shakeSignals = recentSignals.filter(e => e.type === 'shake').length;
@@ -1415,11 +1711,18 @@
     const flowerYield = mean(state.flowers.map(f => f.nectar/f.cap), 0);
     const buzz = clamp(counts.dance / Math.max(5, total * 0.05) * 0.65 + coherence * 0.35, 0, 1);
     const danceActivity = clamp(counts.dance / Math.max(1, total * 0.06), 0, 1);
-    const phero = clamp(flowerYield * 0.45 + state.flowers.reduce((s,f)=>s+f.confidence,0) / Math.max(1,state.flowers.length) * 0.55, 0, 1);
+    const meanConfidence = state.flowers.reduce((s,f)=>s+f.confidence,0) / Math.max(1,state.flowers.length);
+    const orientationPhero = clamp(flowerYield * 0.35 + meanConfidence * 0.65, 0, 1);
+    const alarmPhero = clamp(failedRecruit / Math.max(4, attempts + 2) + counts.return / Math.max(1, total * 0.22) * 0.25, 0, 1);
+    const queenPhero = clamp(0.45 + counts.hive / total * 0.35 + coherence * 0.2, 0, 1);
+    const broodPhero = clamp((counts.return + counts.forage * 0.5) / Math.max(1, total * 0.3), 0, 1);
+    const phero = clamp((orientationPhero + alarmPhero + queenPhero + broodPhero) / 4, 0, 1);
     const worldModelBits = estimateWorldModelBits();
     const transferRateBits = estimateTransferRateBitsPerSec();
     const envBits = estimateEnvironmentModeledBits();
     const realityEquivalentRuns = estimateRealityEquivalentRuns(envBits);
+    recordInfoSample(state.infoBitsHistory, state.time, worldModelBits);
+    recordInfoSample(state.infoRateHistory, state.time, transferRateBits);
 
     el('mTotal').textContent = total.toLocaleString();
     el('mHive').textContent = counts.hive.toLocaleString();
@@ -1441,6 +1744,10 @@
     el('mRecSuccess').textContent = attempts ? `${Math.round(succ / attempts * 100)}%` : '—';
     el('mRecruits').textContent = recRate.toFixed(1);
     el('mPhero').textContent = phero.toFixed(2);
+    el('mPheroOrient').textContent = orientationPhero.toFixed(2);
+    el('mPheroAlarm').textContent = alarmPhero.toFixed(2);
+    el('mPheroQueen').textContent = queenPhero.toFixed(2);
+    el('mPheroBrood').textContent = broodPhero.toFixed(2);
     el('mBuzz').textContent = buzz.toFixed(2);
     el('mDanceActivity').textContent = danceActivity.toFixed(2);
     el('mContacts').textContent = Math.round(state.contacts).toLocaleString();
@@ -1499,5 +1806,5 @@
     requestAnimationFrame(loop);
   }
 
-  setupControls(); resetSimulation(true); setRunning(true); requestAnimationFrame(loop);
+  setupControls(); setupTooltips(); resetSimulation(true); setRunning(true); requestAnimationFrame(loop);
 })();

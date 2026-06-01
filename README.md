@@ -16,7 +16,7 @@ Local-cue bee colony simulation with foraging, recruitment, and waggle dance beh
 - Agent-based bees (no global coordinator).
 - Waggle dance recruitment and memory-based foraging.
 - Core signal primitives: waggle (positive), stop (negative), tremble (receiver recruitment), shaking (activation).
-- Adjustable world size (`1.0x` to `2.4x`) for larger simulations.
+- Adjustable world size (`1.0x` to `10.0x`) for larger simulations.
 - Hive zoom inset for close-up waggle dance behavior.
 - Live metrics, communication manifold, and mini heat panels.
 

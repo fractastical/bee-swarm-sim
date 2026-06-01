@@ -28,9 +28,9 @@
         <summary>Hive Configuration</summary>
         <div class="detail-body">
           <div class="control"><div class="row"><label for="engine">Simulation engine</label><output id="engineOut"></output></div><select id="engine"><option value="internal">Internal sim</option><option value="beestack_trace">BeeStack trace</option></select></div>
-          <div class="control"><div class="row"><label for="worldScale">World size</label><output id="worldScaleOut"></output></div><input id="worldScale" type="range" min="1" max="2.4" step="0.1" value="1.0"></div>
+          <div class="control"><div class="row"><label for="worldScale">World size</label><output id="worldScaleOut"></output></div><input id="worldScale" type="range" min="1" max="10" step="0.1" value="1.0"></div>
           <div class="control"><div class="row"><label for="beeCount">Total bees</label><output id="beeCountOut"></output></div><input id="beeCount" type="range" min="80" max="900" step="20" value="420"></div>
-          <div class="control"><div class="row"><label for="flowerCount">Flower patches</label><output id="flowerCountOut"></output></div><input id="flowerCount" type="range" min="1" max="6" step="1" value="3"></div>
+          <div class="control"><div class="row"><label for="flowerCount">Flower patches</label><output id="flowerCountOut"></output></div><input id="flowerCount" type="range" min="1" max="30" step="1" value="3"></div>
           <div class="control"><div class="row"><label for="simSpeed">Simulation speed</label><output id="simSpeedOut"></output></div><input id="simSpeed" type="range" min="0.2" max="4" step="0.1" value="1.0"></div>
         </div>
       </details>
@@ -59,6 +59,8 @@
           <div class="control"><div class="row"><label for="danceTempo">Dance tempo</label><output id="danceTempoOut"></output></div><input id="danceTempo" type="range" min="0.2" max="2.0" step="0.05" value="0.65"></div>
           <div class="control"><div class="row"><label for="danceInfluence">Recruitment strength</label><output id="danceInfluenceOut"></output></div><input id="danceInfluence" type="range" min="0" max="1" step="0.01" value="0.52"></div>
           <div class="control"><div class="row"><label for="danceDuration">Dance duration</label><output id="danceDurationOut"></output></div><input id="danceDuration" type="range" min="2" max="28" step="0.5" value="10"></div>
+          <div class="control"><div class="row"><label for="followerRunsMean">Follower runs sampled</label><output id="followerRunsMeanOut"></output></div><input id="followerRunsMean" type="range" min="1" max="5" step="0.1" value="2.6"></div>
+          <div class="control"><div class="row"><label for="distanceNonlinearity">Distance nonlinearity</label><output id="distanceNonlinearityOut"></output></div><input id="distanceNonlinearity" type="range" min="0" max="1" step="0.01" value="0.35"></div>
           <div class="control"><div class="row"><label for="scoutFrac">Scout tendency</label><output id="scoutFracOut"></output></div><input id="scoutFrac" type="range" min="0.02" max="0.75" step="0.01" value="0.18"></div>
         </div>
       </details>
@@ -68,6 +70,13 @@
         <div class="detail-body">
           <div class="control"><div class="row"><label for="scentRadius">Local scent radius</label><output id="scentRadiusOut"></output></div><input id="scentRadius" type="range" min="30" max="250" step="2" value="135"></div>
           <div class="control"><div class="row"><label for="trailFade">Trail persistence</label><output id="trailFadeOut"></output></div><input id="trailFade" type="range" min="0.80" max="0.995" step="0.001" value="0.962"></div>
+          <div class="readout">
+            Pheromone channels shown in metrics:
+            <span class="cite" title="Orientation marker analog (Nasonov; 20th-century honey-bee orientation literature).">orientation</span>,
+            <span class="cite" title="Alarm pheromone analog used for defensive/disruption context (isoamyl acetate line; reviewed broadly by Free 1987).">alarm</span>,
+            <span class="cite" title="Queen-signaling analog for colony social cohesion (QMP literature from the late 20th century onward).">queen</span>,
+            <span class="cite" title="Brood-signaling analog affecting labor allocation (brood pheromone literature, e.g., Le Conte line, 1990s+).">brood</span>.
+          </div>
         </div>
       </details>
 
@@ -93,7 +102,7 @@
           <ul class="def-list">
             <li><span class="def-term cite" title="Waggle dance encodes direction by waggle angle and distance by waggle duration (von Frisch 1967; Seeley 1995).">Waggle</span>: positive recruitment signal; dancers advertise food direction + distance.</li>
             <li><span class="def-term cite" title="Stop signal acts as inhibitory feedback that can reduce recruitment to contested/risky resources (Nieh 2010 review context).">Stop</span>: inhibitory signal that reduces/interrupts ongoing recruitment pressure.</li>
-            <li><span class="def-term cite" title="Tremble dance is associated with unloading delays and recruits nectar receivers (Seeley 1992; Seeley 1995).">Tremble</span>: unloading-stress signal that recruits processing labor inside the hive.</li>
+            <li><span class="def-term cite" title="Tremble dance: a returning forager walks irregularly on the comb while visibly shuddering/vibrating her body (not a waggle run), often after long nectar-unloading delays; this helps recruit nectar receivers (Seeley 1992; Seeley 1995).">Tremble</span>: a shuddering, irregular in-hive dance that appears when unloading is delayed and helps recruit receiver bees.</li>
             <li><span class="def-term cite" title="Shaking signal broadly increases worker activity and labor mobilization (Nieh 1998; later robotic signal studies in the 2000s).">Shaking</span>: broad activation signal that mobilizes idle workers.</li>
           </ul>
         </div>
@@ -102,6 +111,9 @@
         <summary>Sources & assumptions</summary>
         <div class="detail-body readout">
           Citation-backed information mode uses literature-informed ranges for waggle direction/distance coding and follower sampling; numbers are still simplified for simulation.
+          <div style="margin-top:8px;">
+            <span class="cite" title="All citations: von Frisch (1967) The Dance Language and Orientation of Bees; Seeley (1992) The tremble dance in honey bees: message and behavioral context; Seeley (1995) The Wisdom of the Hive; Nieh (1998) The role of shaking signals in honey bee communication; Nieh (2010 review context) stop-signal inhibitory recruitment; Free (1987) Pheromones of Social Bees; Le Conte line (1990s+) brood pheromone and labor allocation; Couvillon et al. (2019) The dance legacy of Karl von Frisch; Schurch et al. (2021) Honey bees communicate distance via non-linear waggle duration functions; Ai et al. (2019) Neuroethology of the Waggle Dance; Menzel et al. (2023) Honey bees infer source location from dances of returning foragers; Riley et al. (2005) Nature 435:205-207, flight paths of recruited bees; Shannon (1948) information theory; Fisher (1993) circular statistics; Pearson (1895) coefficient of variation.">All citations (hover)</span>
+          </div>
         </div>
       </details>
     </section>
@@ -113,6 +125,7 @@
         <button id="stepBtn">Step Simulation</button>
         <button id="resetBtn">Reset Simulation</button>
         <button id="randomizeBtn">Randomize Configuration</button>
+        <button id="disturbBtn">Inject Disturbance</button>
         <button id="tuneBtn">Start tiny hill-climb tuner</button>
         <button id="clearBtn">Clear Trails</button>
         <button id="exportBtn">Export Results JSON</button>
@@ -147,7 +160,7 @@
       </div></div>
       <div class="metric-card"><h2>DANCE & RECRUITMENT</h2><div class="kv">
         <span class="cite" title="Number of bees currently performing waggle runs; dance conveys direction and distance vectors (von Frisch 1967).">Waggle Dancers</span><span id="mWaggle">0</span>
-        <span class="cite" title="Tremble events in the last minute; linked to unloading delays and receiver recruitment (Seeley 1992).">Tremble Signals</span><span id="mTremble">0</span>
+        <span class="cite" title="Count of tremble bouts in the last minute: bees shudder/vibrate while walking irregularly on comb, typically after unloading delays; linked to receiver recruitment (Seeley 1992; Seeley 1995).">Tremble Signals</span><span id="mTremble">0</span>
         <span class="cite" title="Shaking events in the last minute; generalized activation / task mobilization signal (Nieh 1998).">Shaking Signals</span><span id="mShaking">0</span>
         <span class="cite" title="Stop events in the last minute; inhibitory signal reducing ongoing dance recruitment (Nieh 2010 review context).">Stop Signals</span><span id="mStop">0</span>
         <span class="cite" title="Directional agreement score (resultant length r in circular statistics; Fisher 1993 framework). 1=perfect agreement, 0=dispersed headings.">Dance Coherence</span><span id="mCoherence">0.00</span>
@@ -158,7 +171,11 @@
       </div></div>
       <div class="metric-card"><h2>COMMUNICATION</h2><div class="kv">
         <span class="cite" title="Model used for information estimates: citation-backed uses literature-informed assumptions; heuristic uses hand-tuned approximations.">Info Model</span><span id="mInfoModel">citation-backed</span>
-        <span>Pheromone/Scent</span><span id="mPhero">0.00</span>
+        <span class="cite" title="Aggregate pheromone/scent coordination index across modeled channels.">Pheromone/Scent</span><span id="mPhero">0.00</span>
+        <span class="cite" title="Orientation-channel analog (Nasonov-like) tracking route and hive-local guidance pressure.">Orientation</span><span id="mPheroOrient">0.00</span>
+        <span class="cite" title="Alarm-channel analog increasing under failed dance recruitment and disruption.">Alarm</span><span id="mPheroAlarm">0.00</span>
+        <span class="cite" title="Queen-channel analog for in-hive social cohesion signal stability.">Queen</span><span id="mPheroQueen">0.00</span>
+        <span class="cite" title="Brood-channel analog linked to forage demand and colony processing load.">Brood</span><span id="mPheroBrood">0.00</span>
         <span>Harmonic Buzz</span><span id="mBuzz">0.00</span>
         <span>Dance Activity</span><span id="mDanceActivity">0.00</span>
         <span>Local Contacts</span><span id="mContacts">0</span>
@@ -212,9 +229,9 @@
 
       <div class="bottom">
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">PHEROMONE / SCENT</div><div class="info-i cite" title="Synthetic local cue field from flower confidence and hive return traffic; brighter regions indicate stronger orientation cues.">i</div></div><canvas id="heatPhero"></canvas></div>
-        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">NECTAR GRADIENT</div><div class="info-i cite" title="Estimated nectar availability over space; hot colors indicate richer currently exploitable patches.">i</div></div><canvas id="heatNectar"></canvas></div>
+        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">CURRENT TRANSFER RATE</div><div class="info-i cite" title="Live waggle-channel information throughput over time (bits per second), estimated from active dancers, audience, and decode assumptions.">i</div></div><canvas id="heatNectar"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">WAGGLE ACTIVITY</div><div class="info-i cite" title="Directional dance intensity near the hive; spokes indicate dominant advertised vectors.">i</div></div><canvas id="heatDance"></canvas></div>
-        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">HARMONIC BUZZ</div><div class="info-i cite" title="Stylized vibro-acoustic activity proxy from active dancers and local flower demand coupling.">i</div></div><canvas id="heatBuzz"></canvas></div>
+        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">OVERALL INFORMATION</div><div class="info-i cite" title="Estimated colony information state over time (bits), based on dance-plus-memory world model content.">i</div></div><canvas id="heatBuzz"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">LOCAL COHERENCE</div><div class="info-i cite" title="Alignment of nearby bee headings and motion vectors; brighter lines indicate stronger local directional agreement.">i</div></div><canvas id="heatCoherence"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">ROUTE CONFIDENCE</div><div class="info-i cite" title="Colony confidence in hive-to-resource routes based on repeated successful visits and reinforcement.">i</div></div><canvas id="heatRoutes"></canvas></div>
       </div>
