@@ -78,6 +78,8 @@ References:
 - Schurch et al. (2021), calibration protocol context: [Honey bees communicate distance via non-linear waggle duration functions](https://pmc.ncbi.nlm.nih.gov/articles/PMC8029670/).
 - Ai et al. (2019), follower interaction and sensory channels: [Neuroethology of the Waggle Dance](https://pmc.ncbi.nlm.nih.gov/articles/PMC6835826/).
 - Menzel et al. (2023), recruits infer source location from dance information: [Honey bees infer source location from the dances of returning foragers](https://pmc.ncbi.nlm.nih.gov/articles/PMC10041085/).
+- Ono et al. (1995), thermal defensive balling of hornets by Apis cerana japonica (core ~47°C): *Unusual thermal defence by a honeybee against mass attack by hornets*, Nature 377, 334–336.
+- Sugahara & Sakamoto (2009), heat and CO2 contributions to hornet killing in defensive bee balls.
 - Shannon (1948), information-theoretic bit/entropy framing used for model information metrics.
 - Fisher (1993), circular statistics framing used for directional coherence metrics.
 - Pearson (1895), coefficient-of-variation framing used for distance coherence metrics.

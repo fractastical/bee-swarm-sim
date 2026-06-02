@@ -112,7 +112,7 @@
         <div class="detail-body readout">
           Citation-backed information mode uses literature-informed ranges for waggle direction/distance coding and follower sampling; numbers are still simplified for simulation.
           <div style="margin-top:8px;">
-            <span class="cite" title="All citations: von Frisch (1967) The Dance Language and Orientation of Bees; Seeley (1992) The tremble dance in honey bees: message and behavioral context; Seeley (1995) The Wisdom of the Hive; Nieh (1998) The role of shaking signals in honey bee communication; Nieh (2010 review context) stop-signal inhibitory recruitment; Free (1987) Pheromones of Social Bees; Le Conte line (1990s+) brood pheromone and labor allocation; Couvillon et al. (2019) The dance legacy of Karl von Frisch; Schurch et al. (2021) Honey bees communicate distance via non-linear waggle duration functions; Ai et al. (2019) Neuroethology of the Waggle Dance; Menzel et al. (2023) Honey bees infer source location from dances of returning foragers; Riley et al. (2005) Nature 435:205-207, flight paths of recruited bees; Shannon (1948) information theory; Fisher (1993) circular statistics; Pearson (1895) coefficient of variation.">All citations (hover)</span>
+            <span class="cite" title="All citations: von Frisch (1967) The Dance Language and Orientation of Bees; Seeley (1992) The tremble dance in honey bees: message and behavioral context; Seeley (1995) The Wisdom of the Hive; Nieh (1998) The role of shaking signals in honey bee communication; Nieh (2010 review context) stop-signal inhibitory recruitment; Free (1987) Pheromones of Social Bees; Le Conte line (1990s+) brood pheromone and labor allocation; Couvillon et al. (2019) The dance legacy of Karl von Frisch; Schurch et al. (2021) Honey bees communicate distance via non-linear waggle duration functions; Ai et al. (2019) Neuroethology of the Waggle Dance; Menzel et al. (2023) Honey bees infer source location from dances of returning foragers; Riley et al. (2005) Nature 435:205-207, flight paths of recruited bees; Ono et al. (1995) Nature 377:334-336, thermal defensive balling of hornets by Apis cerana japonica; Sugahara &amp; Sakamoto (2009) heat and CO2 contributions to hornet killing in defensive bee balls; Shannon (1948) information theory; Fisher (1993) circular statistics; Pearson (1895) coefficient of variation.">All citations (hover)</span>
           </div>
         </div>
       </details>
@@ -126,6 +126,9 @@
         <button id="resetBtn">Reset Simulation</button>
         <button id="randomizeBtn">Randomize Configuration</button>
         <button id="disturbBtn">Inject Disturbance</button>
+        <button id="intruderBtn">Summon Hornet</button>
+        <button id="addObstacleBtn">Add Obstacle</button>
+        <button id="clearObstacleBtn">Clear Obstacles</button>
         <button id="tuneBtn">Start tiny hill-climb tuner</button>
         <button id="clearBtn">Clear Trails</button>
         <button id="exportBtn">Export Results JSON</button>
@@ -151,6 +154,7 @@
         <span>Foragers</span><span id="mForage">0</span>
         <span>Returning</span><span id="mReturn">0</span>
         <span>Dancers</span><span id="mDance">0</span>
+        <span class="cite" title="Bees mobilized into a defensive heat ball around a hornet. Apis cerana forms a ball of hundreds of bees that reaches ~46-47°C core temperature, lethal to the hornet but within the bees' ~48-50°C tolerance (Ono et al. 1995, Nature; Sugahara &amp; Sakamoto 2009). Alarm signaling drives recruitment (Free 1987).">Defenders (heat ball)</span><span id="mDefenders">0</span>
       </div></div>
       <div class="metric-card"><h2>FORAGER ROLES</h2><div class="kv">
         <span><i class="mini-dot" style="background:var(--blue)"></i>Explorer</span><span id="mExplorer">0%</span>
@@ -205,6 +209,7 @@
           <div class="tools"><button id="hiveZoomBtn" class="toolbtn" title="Toggle hive zoom">⌕</button><button id="hiveZoomInBtn" class="toolbtn" title="Increase hive zoom">＋</button><button id="hiveZoomOutBtn" class="toolbtn" title="Decrease hive zoom">－</button><button id="hiveZoomResetBtn" class="toolbtn" title="Reset hive zoom">⛶</button></div>
         </div>
         <canvas id="world"></canvas>
+        <div id="beeInspector" class="bee-inspector hidden"></div>
         <div id="hiveZoomPanel" class="hive-zoom">
           <div class="hive-zoom-label">HIVE ZOOM · WAGGLE TRACE</div>
           <canvas id="hiveZoom"></canvas>
@@ -215,6 +220,8 @@
           <span><i class="mini-dot" style="background:var(--purple)"></i>Waggle Dancer</span>
           <span><i class="mini-dot" style="background:var(--green)"></i>Recruit</span>
           <span><i class="mini-dot" style="background:var(--orange)"></i>Returning</span>
+          <span><i class="mini-dot" style="background:#ff4d4d"></i>Defender</span>
+          <span class="legend-hint">Click bee to inspect · drag flower/obstacle · shift- or right-click obstacle to remove</span>
           <span class="trail-slider">Trails: 120s <span class="fake-slider"></span></span>
         </div>
       </div>

@@ -184,6 +184,27 @@
     z-index: 7;
   }
   .hive-zoom.hidden { display: none; }
+  .bee-inspector {
+    position: absolute;
+    left: 12px;
+    bottom: 44px;
+    width: min(38%, 230px);
+    padding: 9px 11px;
+    border: 1px solid rgba(120,166,255,0.45);
+    border-radius: 9px;
+    background: rgba(5,8,12,0.86);
+    box-shadow: 0 12px 28px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.04);
+    color: #dce6f5;
+    font-size: 11px;
+    line-height: 1.5;
+    z-index: 8;
+    pointer-events: none;
+  }
+  .bee-inspector.hidden { display: none; }
+  .bee-inspector .bi-title { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: #9cc0ff; margin-bottom: 4px; }
+  .bee-inspector .bi-row { display: flex; justify-content: space-between; gap: 10px; }
+  .bee-inspector .bi-row span:last-child { color: #f2f5fb; font-weight: 650; }
+  .legend-hint { color: var(--muted); font-style: italic; }
   .hive-zoom-label {
     position: absolute;
     left: 8px;

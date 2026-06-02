@@ -105,6 +105,9 @@
     lastMetrics: 0, lastHeat: 0, fps: 60, lastFrame: performance.now(), contacts: 0,
     tuning: false, tune: { lastTime: 0, rewardAtLast: 0, bestReward: 0, lastMutation: null, phase: 'manual' },
     disturbance: { active: false, type: '', until: 0, intensity: 1, cooldownUntil: 0 },
+    intruder: { active: false, type: 'hornet', x: 0, y: 0, vx: 0, vy: 0, temp: 35, thermalDose: 0, lethalDose: 12, ballBees: 0, until: 0 },
+    obstacles: [],
+    interact: { selectedBeeId: null, dragFlowerId: null, dragObstacleId: null, dragDX: 0, dragDY: 0 },
     view: { showHiveZoom: true, hiveZoom: 2.5 },
     trace: { active: false, frames: [], idx: 0, accum: 0, dt: 1 / 30, meta: {} }
   };
@@ -119,6 +122,7 @@
   trails.width = WORLD.w; trails.height = WORLD.h;
   const tctx = trails.getContext('2d');
   let tooltipEl = null;
+  let obstacleSeq = 0;
 
   function applyWorldScale(nextScale) {
     const prevW = WORLD.w;
@@ -143,6 +147,9 @@
     }
     for (const f of state.flowers) {
       f.x *= sx; f.y *= sy; f.r *= Math.sqrt((sx + sy) * 0.5);
+    }
+    for (const o of state.obstacles) {
+      o.x *= sx; o.y *= sy; o.r *= Math.sqrt((sx + sy) * 0.5);
     }
     trails.width = WORLD.w;
     trails.height = WORLD.h;
@@ -234,6 +241,8 @@
     state.disturbance.type = '';
     state.disturbance.until = 0;
     state.disturbance.intensity = 1;
+    state.intruder.active = false;
+    state.interact.selectedBeeId = null; state.interact.dragFlowerId = null; state.interact.dragObstacleId = null;
     const first = state.trace.frames[0];
     if (first) applyTraceFrame(first);
     clearTrails();
@@ -340,6 +349,8 @@
     state.disturbance.type = '';
     state.disturbance.until = 0;
     state.disturbance.intensity = 1;
+    state.intruder.active = false;
+    state.interact.selectedBeeId = null; state.interact.dragFlowerId = null; state.interact.dragObstacleId = null;
     state.tune.lastTime = 0; state.tune.rewardAtLast = 0; state.tune.bestReward = 0; state.tune.lastMutation = null;
     if (!keepConfig) randomizeConfig();
     applyWorldScale(cfg.worldScale);
@@ -414,6 +425,9 @@
     el('resetBtn').onclick = () => resetSimulation(true);
     el('randomizeBtn').onclick = () => { randomizeConfig(); resetSimulation(true); };
     el('disturbBtn').onclick = () => injectDisturbance();
+    el('intruderBtn').onclick = () => summonIntruder();
+    el('addObstacleBtn').onclick = () => addObstacle();
+    el('clearObstacleBtn').onclick = () => clearObstacles();
     el('clearBtn').onclick = clearTrails;
     el('tuneBtn').onclick = () => toggleTuner();
     el('exportBtn').onclick = exportResults;
@@ -502,6 +516,174 @@
     tooltipEl.style.display = 'none';
   }
 
+  function worldCanvasMetrics() {
+    const rect = canvas.world.getBoundingClientRect();
+    const scale = Math.min(rect.width / WORLD.w, rect.height / WORLD.h) || 1;
+    const ox = (rect.width - WORLD.w * scale) / 2;
+    const oy = (rect.height - WORLD.h * scale) / 2;
+    return { rect, scale, ox, oy };
+  }
+
+  function eventToWorld(ev) {
+    const { rect, scale, ox, oy } = worldCanvasMetrics();
+    return {
+      x: (ev.clientX - rect.left - ox) / scale,
+      y: (ev.clientY - rect.top - oy) / scale
+    };
+  }
+
+  function pickFlowerAt(p) {
+    let best = null, bestD = Infinity;
+    for (const f of state.flowers) {
+      const d = hypot(f.x - p.x, f.y - p.y);
+      if (d <= f.r + 12 && d < bestD) { best = f; bestD = d; }
+    }
+    return best;
+  }
+
+  function pickBeeAt(p) {
+    let best = null, bestD = Infinity;
+    const reach = 11;
+    for (const b of state.bees) {
+      const d = hypot(b.x - p.x, b.y - p.y);
+      if (d <= reach && d < bestD) { best = b; bestD = d; }
+    }
+    return best;
+  }
+
+  function selectedBee() {
+    if (state.interact.selectedBeeId == null) return null;
+    return state.bees.find(b => b.id === state.interact.selectedBeeId) || null;
+  }
+
+  function pickObstacleAt(p) {
+    let best = null, bestD = Infinity;
+    for (const o of state.obstacles) {
+      const d = hypot(o.x - p.x, o.y - p.y);
+      if (d <= o.r && d < bestD) { best = o; bestD = d; }
+    }
+    return best;
+  }
+
+  function obstacleAvoidance(b) {
+    let x = 0, y = 0;
+    const margin = 32;
+    for (const o of state.obstacles) {
+      const dx = b.x - o.x, dy = b.y - o.y;
+      const d = hypot(dx, dy);
+      const range = o.r + margin;
+      if (d < range && d > 1e-3) {
+        const w = 1 - d / range;
+        x += dx / d * w;
+        y += dy / d * w;
+      }
+    }
+    return { x, y };
+  }
+
+  function resolveObstacleCollision(b) {
+    for (const o of state.obstacles) {
+      const dx = b.x - o.x, dy = b.y - o.y;
+      const d = hypot(dx, dy);
+      if (d < o.r) {
+        const nx = d > 1e-3 ? dx / d : Math.cos(b.heading);
+        const ny = d > 1e-3 ? dy / d : Math.sin(b.heading);
+        b.x = o.x + nx * o.r;
+        b.y = o.y + ny * o.r;
+        const vn = b.vx * nx + b.vy * ny;
+        if (vn < 0) { b.vx -= vn * nx; b.vy -= vn * ny; }
+      }
+    }
+  }
+
+  function addObstacle() {
+    const r = randRange(48, 82) * Math.sqrt(cfg.worldScale);
+    const x = clamp(WORLD.w * randRange(0.4, 0.62), r + 20, WORLD.w - r - 20);
+    const y = clamp(WORLD.h * randRange(0.28, 0.72), r + 20, WORLD.h - r - 20);
+    state.obstacles.push({ id: obstacleSeq++, x, y, r });
+    el('tunerReadout').textContent = `Added obstacle (${state.obstacles.length} total). Drag to reposition; shift-click to remove.`;
+  }
+
+  function clearObstacles() {
+    state.obstacles = [];
+    state.interact.dragObstacleId = null;
+    el('tunerReadout').textContent = 'Obstacles cleared.';
+  }
+
+  function setupWorldInteraction() {
+    const cv = canvas.world;
+    cv.addEventListener('contextmenu', ev => {
+      const p = eventToWorld(ev);
+      const obstacle = pickObstacleAt(p);
+      if (obstacle) {
+        ev.preventDefault();
+        state.obstacles = state.obstacles.filter(o => o.id !== obstacle.id);
+      }
+    });
+    cv.addEventListener('mousedown', ev => {
+      const p = eventToWorld(ev);
+      if (ev.shiftKey) {
+        const obstacle = pickObstacleAt(p);
+        if (obstacle) {
+          state.obstacles = state.obstacles.filter(o => o.id !== obstacle.id);
+          ev.preventDefault();
+          return;
+        }
+      }
+      const flower = pickFlowerAt(p);
+      if (flower) {
+        state.interact.dragFlowerId = flower.id;
+        state.interact.dragDX = flower.x - p.x;
+        state.interact.dragDY = flower.y - p.y;
+        cv.style.cursor = 'grabbing';
+        ev.preventDefault();
+        return;
+      }
+      const obstacle = pickObstacleAt(p);
+      if (obstacle) {
+        state.interact.dragObstacleId = obstacle.id;
+        state.interact.dragDX = obstacle.x - p.x;
+        state.interact.dragDY = obstacle.y - p.y;
+        cv.style.cursor = 'grabbing';
+        ev.preventDefault();
+        return;
+      }
+      const bee = pickBeeAt(p);
+      state.interact.selectedBeeId = bee ? bee.id : null;
+      updateInspector();
+    });
+    cv.addEventListener('mousemove', ev => {
+      const p = eventToWorld(ev);
+      if (state.interact.dragFlowerId != null) {
+        const f = state.flowers.find(fl => fl.id === state.interact.dragFlowerId);
+        if (f) {
+          f.x = clamp(p.x + state.interact.dragDX, 40, WORLD.w - 40);
+          f.y = clamp(p.y + state.interact.dragDY, 40, WORLD.h - 40);
+          f.confidence = Math.min(f.confidence, 0.18);
+        }
+        return;
+      }
+      if (state.interact.dragObstacleId != null) {
+        const o = state.obstacles.find(ob => ob.id === state.interact.dragObstacleId);
+        if (o) {
+          o.x = clamp(p.x + state.interact.dragDX, o.r, WORLD.w - o.r);
+          o.y = clamp(p.y + state.interact.dragDY, o.r, WORLD.h - o.r);
+        }
+        return;
+      }
+      cv.style.cursor = (pickFlowerAt(p) || pickObstacleAt(p)) ? 'grab' : (pickBeeAt(p) ? 'pointer' : 'default');
+    });
+    const endDrag = () => {
+      if (state.interact.dragFlowerId != null || state.interact.dragObstacleId != null) {
+        state.interact.dragFlowerId = null;
+        state.interact.dragObstacleId = null;
+        cv.style.cursor = 'default';
+      }
+    };
+    cv.addEventListener('mouseup', endDrag);
+    cv.addEventListener('mouseleave', endDrag);
+  }
+
   function setRunning(v) {
     state.running = v;
     el('pauseBtn').textContent = v ? 'Pause Simulation' : 'Resume Simulation';
@@ -553,6 +735,74 @@
     state.disturbance.intensity = randRange(0.9, 1.35);
     state.disturbance.cooldownUntil = state.disturbance.until + 10;
     el('tunerReadout').textContent = `Injected ${type} disturbance for ~${Math.round(duration)}s (coherence stress test).`;
+  }
+
+  // Hornet heat-balling defense (Apis cerana vs Vespa). Literature anchors:
+  // - Defensive ball core temperature ~46-47 C (Ono et al. 1995, Nature).
+  // - Hornet upper lethal limit ~44-46 C; bees tolerate ~48-50 C, so the colony "cooks"
+  //   the hornet within a survivable margin (Ono et al. 1995; Sugahara & Sakamoto 2009).
+  const THERMAL = {
+    hiveTemp: 35,        // resting cluster temperature (C)
+    lethalTemp: 45,      // hornet upper lethal threshold (C)
+    beeTolerance: 50,    // honey bee upper tolerance (C)
+    ballRadius: 30,      // px radius counted as inside the defensive ball
+    perBeeHeat: 0.62     // C contributed toward plateau per balling bee
+  };
+
+  function summonIntruder() {
+    if (state.intruder.active) {
+      el('tunerReadout').textContent = 'Hornet already present near the colony.';
+      return;
+    }
+    const I = state.intruder;
+    const ang = randRange(-0.7, 0.7);
+    const reach = hive.r * 2.6 + randRange(80, 220);
+    I.type = 'hornet';
+    I.x = clamp(hive.x + Math.cos(ang) * reach + hive.r, 50, WORLD.w - 50);
+    I.y = clamp(hive.y + Math.sin(ang) * reach, 50, WORLD.h - 50);
+    I.vx = 0; I.vy = 0;
+    I.temp = THERMAL.hiveTemp;
+    I.thermalDose = 0;
+    I.lethalDose = randRange(9, 15);
+    I.ballBees = 0;
+    I.until = randRange(45, 75);
+    I.active = true;
+    el('tunerReadout').textContent = 'Hornet detected! Alarm rising; defenders forming a heat ball to cook it.';
+  }
+
+  function updateIntruder(dt) {
+    const I = state.intruder;
+    if (!I.active) return;
+    I.until -= dt;
+
+    let ballBees = 0;
+    for (const b of state.bees) {
+      if (b.state !== 'attack') continue;
+      if (hypot(b.x - I.x, b.y - I.y) < THERMAL.ballRadius) ballBees++;
+    }
+    I.ballBees = ballBees;
+
+    // Ball temperature relaxes toward a plateau set by how many bees engulf the hornet.
+    const targetTemp = clamp(THERMAL.hiveTemp + ballBees * THERMAL.perBeeHeat, THERMAL.hiveTemp, THERMAL.beeTolerance);
+    I.temp = lerp(I.temp, targetTemp, clamp(dt * 1.1, 0, 1));
+    if (I.temp >= THERMAL.lethalTemp) I.thermalDose += (I.temp - THERMAL.lethalTemp + 1) * dt;
+
+    // Once enough bees engulf it, the hornet is pinned; otherwise it pushes toward the hive.
+    const pinned = ballBees >= 8;
+    const speedMul = pinned ? 0.06 : 0.4;
+    const a = Math.atan2(hive.y - I.y, hive.x - I.x) + randn() * 0.7;
+    I.vx = lerp(I.vx, Math.cos(a) * cfg.beeSpeed * speedMul, dt * 1.5);
+    I.vy = lerp(I.vy, Math.sin(a) * cfg.beeSpeed * speedMul, dt * 1.5);
+    I.x = clamp(I.x + I.vx * dt, 18, WORLD.w - 18);
+    I.y = clamp(I.y + I.vy * dt, 18, WORLD.h - 18);
+
+    if (I.thermalDose >= I.lethalDose) {
+      I.active = false;
+      el('tunerReadout').textContent = `Hornet cooked by the heat ball (~${Math.round(I.temp)}°C, ${ballBees} bees).`;
+    } else if (I.until <= 0) {
+      I.active = false;
+      el('tunerReadout').textContent = 'Hornet escaped; colony failed to form a lethal heat ball in time.';
+    }
   }
 
   function toggleTuner() {
@@ -768,6 +1018,15 @@
     b.lastX = b.x; b.lastY = b.y; b.age += dt;
     const wasOutside = !inHive(b);
 
+    // Defensive mobilization: alarm recruits nearby workers to attack the intruder.
+    if (state.intruder.active && b.state !== 'dance' && b.state !== 'attack' && b.state !== 'tremble') {
+      const di = hypot(b.x - state.intruder.x, b.y - state.intruder.y);
+      const alarmR = cfg.scentRadius * 2.4 + hive.r;
+      if (di < alarmR && Math.random() < (0.4 + cfg.shakeInfluence) * dt * 2.4) {
+        b.state = 'attack'; b.role = 'defender'; b.carrying = 0; b.target = null; b.targetFlower = null;
+      }
+    }
+
     if (b.state === 'idle') {
       const disturbance = disturbanceProfile();
       const recruitMul = disturbance ? disturbance.recruitMul : 1;
@@ -900,11 +1159,36 @@
       }
     }
 
+    // Core defensive behavior: defenders engulf the hornet and form a heat ball (thermoballing).
+    else if (b.state === 'attack') {
+      if (!state.intruder.active) {
+        b.state = 'return'; b.role = 'returning'; b.carrying = 0;
+      } else {
+        const ix = state.intruder.x, iy = state.intruder.y;
+        steerToward(b, ix, iy, dt, 1.2, 0.22);
+        const di = hypot(b.x - ix, b.y - iy);
+        if (di < THERMAL.ballRadius) {
+          // Press inward and vibrate to generate heat rather than bounce away.
+          b.vx += Math.cos(b.heading) * cfg.beeSpeed * 0.05 + randn() * 4;
+          b.vy += Math.sin(b.heading) * cfg.beeSpeed * 0.05 + randn() * 4;
+          state.contacts += 1;
+          if (Math.random() < dt * 0.4) state.signalEvents.push({ t: state.time, type: 'shake' });
+        }
+      }
+    }
+
     // Local separation: neighborhood-only repulsion. This is intentionally local, not a global flock command.
     if (cfg.avoidance > 1 && b.state !== 'dance') {
       const sep = localSeparation(b, grid, cfg.avoidance);
       b.vx += sep.x * dt * 34;
       b.vy += sep.y * dt * 34;
+    }
+
+    // Local obstacle avoidance: steer away from nearby blocked zones (look-ahead repulsion).
+    if (state.obstacles.length && b.state !== 'dance') {
+      const av = obstacleAvoidance(b);
+      b.vx += av.x * dt * 70;
+      b.vy += av.y * dt * 70;
     }
 
     if (b.state !== 'dance') {
@@ -913,6 +1197,7 @@
       if (sp > maxV) { b.vx = b.vx / sp * maxV; b.vy = b.vy / sp * maxV; }
       b.x += b.vx * dt; b.y += b.vy * dt;
       keepInWorld(b);
+      if (state.obstacles.length) resolveObstacleCollision(b);
       if (b.state !== 'idle') b.pathLen += hypot(b.x - b.lastX, b.y - b.lastY);
     }
 
@@ -950,7 +1235,8 @@
   function addTrail(b) {
     const map = {
       scout: 'rgba(88,230,230,0.25)', recruit: 'rgba(120,227,109,0.28)', forager: 'rgba(246,194,58,0.30)',
-      returning: 'rgba(255,139,43,0.30)', dancer: 'rgba(178,115,255,0.18)', idle: 'rgba(140,150,170,0.06)'
+      returning: 'rgba(255,139,43,0.30)', dancer: 'rgba(178,115,255,0.18)', idle: 'rgba(140,150,170,0.06)',
+      defender: 'rgba(255,77,77,0.34)'
     };
     tctx.strokeStyle = map[b.role] || map[b.state] || 'rgba(200,200,200,0.10)';
     tctx.lineWidth = b.carrying > 0.2 ? 1.25 : 0.75;
@@ -990,6 +1276,7 @@
         b.heading += randn() * disturbance.jitter * state.disturbance.intensity * dt;
       }
     }
+    updateIntruder(dt);
     fadeTrails(dt);
     pruneEvents();
     const grid = buildGrid();
@@ -1196,6 +1483,7 @@
       state.lastHeat = performance.now();
       drawSmallPanels();
     }
+    updateInspector();
   }
 
   function withWorld(ctx, size, draw) {
@@ -1218,10 +1506,131 @@
       drawScentHints(c);
       drawHive(c);
       drawFlowers(c);
+      drawObstacles(c);
+      drawIntruder(c);
       drawDanceSignals(c);
       drawBees(c);
+      drawSelectionOverlay(c);
       drawWorldFrame(c);
     });
+  }
+
+  function drawIntruder(c) {
+    const I = state.intruder;
+    if (!I.active) return;
+    c.save();
+
+    // Thermal halo: warms from blue toward red as the heat ball intensifies.
+    const tempFrac = clamp((I.temp - THERMAL.hiveTemp) / (THERMAL.beeTolerance - THERMAL.hiveTemp), 0, 1);
+    const hue = lerp(210, 0, tempFrac);
+    const haloR = 34 + 12 * tempFrac + 6 * Math.sin(state.time * 6);
+    const halo = c.createRadialGradient(I.x, I.y, 0, I.x, I.y, haloR * 2.0);
+    halo.addColorStop(0, `hsla(${hue}, 95%, 60%, ${0.18 + 0.3 * tempFrac})`);
+    halo.addColorStop(1, `hsla(${hue}, 95%, 60%, 0)`);
+    c.fillStyle = halo;
+    c.beginPath(); c.arc(I.x, I.y, haloR * 2.0, 0, TAU); c.fill();
+
+    // Hornet body (wasp-like), oriented along travel.
+    const ang = Math.atan2(I.vy, I.vx);
+    c.translate(I.x, I.y);
+    c.rotate(ang);
+    c.fillStyle = '#1c1a10';
+    c.beginPath(); c.ellipse(0, 0, 12, 5.4, 0, 0, TAU); c.fill();
+    c.fillStyle = '#e7b71f';
+    for (let s = -6; s <= 6; s += 4) {
+      c.beginPath(); c.ellipse(s, 0, 1.5, 5.2, 0, 0, TAU); c.fill();
+    }
+    c.fillStyle = '#1c1a10';
+    c.beginPath(); c.ellipse(11, 0, 3.4, 3.2, 0, 0, TAU); c.fill();
+    c.strokeStyle = 'rgba(20,18,12,0.9)'; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(12, -1.5); c.lineTo(17, -4); c.moveTo(12, 1.5); c.lineTo(17, 4); c.stroke();
+    c.rotate(-ang);
+
+    // Temperature ring + label.
+    c.lineWidth = 3;
+    c.strokeStyle = 'rgba(40,50,60,0.8)';
+    c.beginPath(); c.arc(0, 0, 26, 0, TAU); c.stroke();
+    c.strokeStyle = `hsla(${hue}, 95%, 58%, 0.95)`;
+    c.beginPath(); c.arc(0, 0, 26, -Math.PI / 2, -Math.PI / 2 + TAU * tempFrac); c.stroke();
+    c.fillStyle = 'rgba(236,242,248,0.92)';
+    c.font = '10px ui-sans-serif, system-ui';
+    c.textAlign = 'center';
+    c.fillText(`${Math.round(I.temp)}°C`, 0, -32);
+    c.restore();
+  }
+
+  function drawObstacles(c) {
+    c.save();
+    for (const o of state.obstacles) {
+      const g = c.createRadialGradient(o.x, o.y, o.r * 0.18, o.x, o.y, o.r);
+      g.addColorStop(0, 'rgba(38,12,18,0.34)');
+      g.addColorStop(0.72, 'rgba(74,22,30,0.42)');
+      g.addColorStop(1, 'rgba(132,46,56,0.16)');
+      c.fillStyle = g;
+      c.beginPath(); c.arc(o.x, o.y, o.r, 0, TAU); c.fill();
+      const dragging = state.interact.dragObstacleId === o.id;
+      c.strokeStyle = dragging ? 'rgba(255,140,140,0.95)' : 'rgba(255,99,99,0.55)';
+      c.lineWidth = dragging ? 2.4 : 1.6;
+      c.setLineDash([6, 6]);
+      c.beginPath(); c.arc(o.x, o.y, o.r, 0, TAU); c.stroke();
+      c.setLineDash([]);
+    }
+    c.restore();
+  }
+
+  function drawSelectionOverlay(c) {
+    if (state.interact.dragFlowerId != null) {
+      const f = state.flowers.find(fl => fl.id === state.interact.dragFlowerId);
+      if (f) {
+        c.save();
+        c.strokeStyle = 'rgba(120,166,255,0.9)';
+        c.lineWidth = 2;
+        c.setLineDash([5, 5]);
+        c.beginPath(); c.arc(f.x, f.y, f.r + 10, 0, TAU); c.stroke();
+        c.setLineDash([]);
+        c.strokeStyle = 'rgba(120,166,255,0.5)';
+        c.beginPath(); c.moveTo(hive.x, hive.y); c.lineTo(f.x, f.y); c.stroke();
+        c.restore();
+      }
+    }
+    const b = selectedBee();
+    if (!b) return;
+    c.save();
+    const pulse = 9 + Math.sin(state.time * 6) * 1.6;
+    c.strokeStyle = 'rgba(120,166,255,0.95)';
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(b.x, b.y, pulse, 0, TAU); c.stroke();
+    if (b.target) {
+      c.strokeStyle = 'rgba(120,166,255,0.55)';
+      c.setLineDash([4, 6]);
+      c.beginPath(); c.moveTo(b.x, b.y); c.lineTo(b.target.x, b.target.y); c.stroke();
+      c.setLineDash([]);
+    }
+    if (b.memory) {
+      c.fillStyle = 'rgba(246,194,58,0.9)';
+      c.beginPath(); c.arc(b.memory.x, b.memory.y, 4, 0, TAU); c.fill();
+    }
+    c.restore();
+  }
+
+  function updateInspector() {
+    const box = el('beeInspector');
+    if (!box) return;
+    const b = selectedBee();
+    if (!b) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const memTxt = b.memory ? `#${b.memory.flowerId ?? '—'} · q ${(b.memory.quality || 0).toFixed(2)}` : 'none';
+    const tgtTxt = b.target ? `${Math.round(hypot(b.target.x - hive.x, b.target.y - hive.y))} px` : '—';
+    const row = (label, value) => `<div class="bi-row"><span>${label}</span><span>${value}</span></div>`;
+    box.innerHTML =
+      `<div class="bi-title">BEE #${b.id}</div>` +
+      row('State', b.state) +
+      row('Role', b.role) +
+      row('Source', b.source) +
+      row('Carrying', `${Math.round(b.carrying * 100)}%`) +
+      row('Memory', memTxt) +
+      row('Target dist', tgtTxt) +
+      row('Path len', `${Math.round(b.pathLen)} px`);
   }
 
   function drawGrid(c) {
@@ -1314,6 +1723,7 @@
   }
 
   function beeColor(b) {
+    if (b.state === 'attack' || b.role === 'defender') return '#ff4d4d';
     if (b.state === 'dance') return '#b273ff';
     if (b.state === 'tremble' || b.role === 'trembler') return '#78a6ff';
     if (b.role === 'recruit') return '#78e36d';
@@ -1683,7 +2093,7 @@
   function updateMetrics(force = false) {
     if (!force && performance.now() - state.lastMetrics < 250) return;
     state.lastMetrics = performance.now();
-    const counts = { idle:0, hive:0, scout:0, forage:0, return:0, dance:0, recruit:0 };
+    const counts = { idle:0, hive:0, scout:0, forage:0, return:0, dance:0, recruit:0, attack:0 };
     for (const b of state.bees) {
       if (inHive(b)) counts.hive++;
       if (b.state === 'scout') counts.scout++;
@@ -1692,6 +2102,7 @@
       if (b.state === 'dance') counts.dance++;
       if (b.role === 'recruit') counts.recruit++;
       if (b.state === 'idle') counts.idle++;
+      if (b.state === 'attack') counts.attack++;
     }
     const total = state.bees.length || 1;
     const recentRecruit = state.recruitEvents.filter(e=>e.t > state.time - 60);
@@ -1713,7 +2124,8 @@
     const danceActivity = clamp(counts.dance / Math.max(1, total * 0.06), 0, 1);
     const meanConfidence = state.flowers.reduce((s,f)=>s+f.confidence,0) / Math.max(1,state.flowers.length);
     const orientationPhero = clamp(flowerYield * 0.35 + meanConfidence * 0.65, 0, 1);
-    const alarmPhero = clamp(failedRecruit / Math.max(4, attempts + 2) + counts.return / Math.max(1, total * 0.22) * 0.25, 0, 1);
+    const defenseAlarm = state.intruder.active ? clamp(0.45 + counts.attack / Math.max(1, total * 0.25), 0, 1) : 0;
+    const alarmPhero = clamp(failedRecruit / Math.max(4, attempts + 2) + counts.return / Math.max(1, total * 0.22) * 0.25 + defenseAlarm, 0, 1);
     const queenPhero = clamp(0.45 + counts.hive / total * 0.35 + coherence * 0.2, 0, 1);
     const broodPhero = clamp((counts.return + counts.forage * 0.5) / Math.max(1, total * 0.3), 0, 1);
     const phero = clamp((orientationPhero + alarmPhero + queenPhero + broodPhero) / 4, 0, 1);
@@ -1730,6 +2142,7 @@
     el('mForage').textContent = counts.forage.toLocaleString();
     el('mReturn').textContent = counts.return.toLocaleString();
     el('mDance').textContent = counts.dance.toLocaleString();
+    el('mDefenders').textContent = counts.attack.toLocaleString();
     el('mExplorer').textContent = `${Math.round((counts.scout + counts.idle*0.2)/total*100)}%`;
     el('mScoutPct').textContent = `${Math.round(counts.scout/total*100)}%`;
     el('mNectarPct').textContent = `${Math.round((counts.forage+counts.return)/total*100)}%`;
@@ -1806,5 +2219,5 @@
     requestAnimationFrame(loop);
   }
 
-  setupControls(); setupTooltips(); resetSimulation(true); setRunning(true); requestAnimationFrame(loop);
+  setupControls(); setupTooltips(); setupWorldInteraction(); resetSimulation(true); setRunning(true); requestAnimationFrame(loop);
 })();
