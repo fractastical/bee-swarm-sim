@@ -101,7 +101,7 @@
   const state = {
     bees: [], flowers: [], time: 0, running: true, delivered: 0, flowerVisits: 0,
     danceHistory: [], recruitEvents: [], efficiencySamples: [], pathSamples: [], deliveryEvents: [],
-    signalEvents: [], infoRateHistory: [], infoBitsHistory: [],
+    signalEvents: [], infoRateHistory: [], infoBitsHistory: [], coverageHistory: [],
     lastMetrics: 0, lastHeat: 0, fps: 60, lastFrame: performance.now(), contacts: 0,
     tuning: false, tune: { lastTime: 0, rewardAtLast: 0, bestReward: 0, lastMutation: null, phase: 'manual' },
     disturbance: { active: false, type: '', until: 0, intensity: 1, cooldownUntil: 0 },
@@ -115,7 +115,7 @@
   const canvas = {
     world: el('world'), hiveZoom: el('hiveZoom'), manifold: el('manifold'),
     heatPhero: el('heatPhero'), heatNectar: el('heatNectar'), heatDance: el('heatDance'),
-    heatBuzz: el('heatBuzz'), heatCoherence: el('heatCoherence'), heatRoutes: el('heatRoutes')
+    heatBuzz: el('heatBuzz'), heatCoverage: el('heatCoverage'), heatRoutes: el('heatRoutes')
   };
   const ctx = Object.fromEntries(Object.entries(canvas).map(([k, c]) => [k, c.getContext('2d')]));
   const trails = document.createElement('canvas');
@@ -237,6 +237,7 @@
     state.signalEvents = [];
     state.infoRateHistory = [];
     state.infoBitsHistory = [];
+    state.coverageHistory = [];
     state.disturbance.active = false;
     state.disturbance.type = '';
     state.disturbance.until = 0;
@@ -344,7 +345,7 @@
     state.time = 0; state.delivered = 0; state.flowerVisits = 0;
     state.danceHistory = []; state.recruitEvents = []; state.efficiencySamples = [];
     state.pathSamples = []; state.deliveryEvents = []; state.signalEvents = [];
-    state.infoRateHistory = []; state.infoBitsHistory = []; state.contacts = 0;
+    state.infoRateHistory = []; state.infoBitsHistory = []; state.coverageHistory = []; state.contacts = 0;
     state.disturbance.active = false;
     state.disturbance.type = '';
     state.disturbance.until = 0;
@@ -1295,6 +1296,7 @@
     state.signalEvents = state.signalEvents.filter(e => e.t >= horizon);
     state.infoRateHistory = state.infoRateHistory.filter(e => e.t >= horizon);
     state.infoBitsHistory = state.infoBitsHistory.filter(e => e.t >= horizon);
+    state.coverageHistory = state.coverageHistory.filter(e => e.t >= horizon);
   }
 
   function reward() {
@@ -1879,7 +1881,7 @@
     drawHeatPanel(ctx.heatNectar, canvas.heatNectar, 'nectar');
     drawHeatPanel(ctx.heatDance, canvas.heatDance, 'dance');
     drawHeatPanel(ctx.heatBuzz, canvas.heatBuzz, 'buzz');
-    drawHeatPanel(ctx.heatCoherence, canvas.heatCoherence, 'coherence');
+    drawHeatPanel(ctx.heatCoverage, canvas.heatCoverage, 'coverage');
     drawHeatPanel(ctx.heatRoutes, canvas.heatRoutes, 'routes');
   }
 
@@ -1892,7 +1894,7 @@
     if (kind === 'nectar') drawNectarMini(c,w,h-12);
     if (kind === 'dance') drawDanceMini(c,w,h-12);
     if (kind === 'buzz') drawBuzzMini(c,w,h-12);
-    if (kind === 'coherence') drawCoherenceMini(c,w,h-12);
+    if (kind === 'coverage') drawCoverageMini(c,w,h-12);
     if (kind === 'routes') drawRoutesMini(c,w,h-12);
     c.restore();
     drawColorbar(c,w,h,kind);
@@ -2041,15 +2043,43 @@
     c.font = '10px ui-sans-serif, system-ui';
     c.fillText(fmtBits(samples.length ? samples[samples.length - 1].v : 0), 12, 13);
   }
-  function drawCoherenceMini(c,w,h) {
-    c.globalCompositeOperation='lighter';
-    const sample = state.bees.filter((_,i)=> i%5===0);
-    for (const b of sample) {
-      const p = mapMini(b.x,b.y,w,h); const sp = hypot(b.vx,b.vy)/cfg.beeSpeed;
-      c.strokeStyle = `hsla(${120 + sp*80},90%,55%,0.13)`; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(p.x,p.y); c.lineTo(p.x + Math.cos(b.heading)*12*sp, p.y + Math.sin(b.heading)*12*sp); c.stroke();
+  function drawCoverageMini(c, w, h) {
+    const pad = 10;
+    const mapW = w - pad * 2;
+    const mapH = h - pad * 2 - 14;
+    const sp = state.spatial || computeSpatialStats();
+    const { cols, rows, grid } = sp;
+    let maxCount = 1;
+    for (let i = 0; i < grid.length; i++) if (grid[i] > maxCount) maxCount = grid[i];
+
+    c.strokeStyle = 'rgba(96,118,148,0.35)';
+    c.strokeRect(pad, pad + 12, mapW, mapH);
+    const cellW = mapW / cols;
+    const cellH = mapH / rows;
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const n = grid[y * cols + x];
+        if (!n) continue;
+        const t = n / maxCount;
+        const hue = lerp(210, 45, t);
+        c.fillStyle = `hsla(${hue}, 90%, 55%, ${0.12 + 0.55 * t})`;
+        c.fillRect(pad + x * cellW, pad + 12 + y * cellH, cellW + 0.5, cellH + 0.5);
+      }
     }
-    for (const f of state.flowers) { const p=mapMini(f.x,f.y,w,h); radial(c,p.x,p.y,h*.16,[[0,'rgba(246,194,58,.18)'],[1,'rgba(0,0,0,0)']]); }
+
+    const H = mapMini(hive.x, hive.y, mapW, mapH);
+    c.fillStyle = 'rgba(246,194,58,0.9)';
+    c.beginPath(); c.arc(pad + H.x, pad + 12 + H.y, 3.5, 0, TAU); c.fill();
+    const C = mapMini(sp.cx, sp.cy, mapW, mapH);
+    c.strokeStyle = 'rgba(120,166,255,0.95)';
+    c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(pad + C.x - 5, pad + 12 + C.y); c.lineTo(pad + C.x + 5, pad + 12 + C.y);
+    c.moveTo(pad + C.x, pad + 12 + C.y - 5); c.lineTo(pad + C.x, pad + 12 + C.y + 5);
+    c.stroke();
+
+    c.fillStyle = 'rgba(216,225,238,.85)';
+    c.font = '10px ui-sans-serif, system-ui';
+    c.fillText(`${sp.coveragePct.toFixed(1)}% coverage`, pad, 10);
   }
   function drawRoutesMini(c,w,h) {
     c.globalCompositeOperation='lighter';
@@ -2087,12 +2117,48 @@
       c.fillText(hi, x + bw - c.measureText(hi).width, y - 4);
       return;
     }
+    if (kind === 'coverage') {
+      c.fillText('low', x, y - 4);
+      c.fillText('high', x + bw - 28, y - 4);
+      return;
+    }
     c.fillText('0.0',x,y-4); c.fillText('1.0',x+bw-22,y-4);
+  }
+
+  function computeSpatialStats() {
+    const cols = 32;
+    const rows = Math.max(12, Math.round(cols * WORLD.h / WORLD.w));
+    const grid = new Uint16Array(cols * rows);
+    const xs = [], ys = [];
+    for (const b of state.bees) {
+      if (b.state === 'dance') continue;
+      const cx = clamp(Math.floor((b.x / WORLD.w) * cols), 0, cols - 1);
+      const cy = clamp(Math.floor((b.y / WORLD.h) * rows), 0, rows - 1);
+      grid[cy * cols + cx]++;
+      xs.push(b.x);
+      ys.push(b.y);
+    }
+    let occupied = 0;
+    for (let i = 0; i < grid.length; i++) if (grid[i] > 0) occupied++;
+    const coveragePct = grid.length ? (occupied / grid.length) * 100 : 0;
+    const xMean = mean(xs, WORLD.w * 0.5);
+    const yMean = mean(ys, WORLD.h * 0.5);
+    const xVar = xs.length > 1 ? mean(xs.map(v => (v - xMean) * (v - xMean)), 0) : 0;
+    const yVar = ys.length > 1 ? mean(ys.map(v => (v - yMean) * (v - yMean)), 0) : 0;
+    return {
+      cols, rows, grid, coveragePct,
+      xMeanPct: (xMean / WORLD.w) * 100,
+      yMeanPct: (yMean / WORLD.h) * 100,
+      xStdPct: (Math.sqrt(xVar) / WORLD.w) * 100,
+      yStdPct: (Math.sqrt(yVar) / WORLD.h) * 100,
+      cx: xMean, cy: yMean
+    };
   }
 
   function updateMetrics(force = false) {
     if (!force && performance.now() - state.lastMetrics < 250) return;
     state.lastMetrics = performance.now();
+    state.spatial = computeSpatialStats();
     const counts = { idle:0, hive:0, scout:0, forage:0, return:0, dance:0, recruit:0, attack:0 };
     for (const b of state.bees) {
       if (inHive(b)) counts.hive++;
@@ -2135,6 +2201,7 @@
     const realityEquivalentRuns = estimateRealityEquivalentRuns(envBits);
     recordInfoSample(state.infoBitsHistory, state.time, worldModelBits);
     recordInfoSample(state.infoRateHistory, state.time, transferRateBits);
+    recordInfoSample(state.coverageHistory, state.time, state.spatial.coveragePct);
 
     el('mTotal').textContent = total.toLocaleString();
     el('mHive').textContent = counts.hive.toLocaleString();
@@ -2173,6 +2240,11 @@
     el('mPathLength').textContent = meanPath ? `${meanPath.toFixed(1)} m` : '—';
     el('mEfficiency').textContent = eff ? eff.toFixed(2) : '—';
     el('mRoutes').textContent = state.flowers.filter(f=>f.discovered || f.confidence>0.18).length.toString();
+    el('mCoverage').textContent = `${state.spatial.coveragePct.toFixed(1)}%`;
+    el('mXMean').textContent = `${state.spatial.xMeanPct.toFixed(1)}%`;
+    el('mXStd').textContent = `${state.spatial.xStdPct.toFixed(1)}%`;
+    el('mYMean').textContent = `${state.spatial.yMeanPct.toFixed(1)}%`;
+    el('mYStd').textContent = `${state.spatial.yStdPct.toFixed(1)}%`;
     el('mSimTime').textContent = fmtTime(state.time);
     el('mSimSpeed').textContent = `${cfg.simSpeed.toFixed(1)}×`;
     const phaseCycle = (state.time % 180) / 180;

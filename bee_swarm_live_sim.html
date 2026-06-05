@@ -194,6 +194,13 @@
         <span>Path Efficiency</span><span id="mEfficiency">0.00</span>
         <span>Valid Routes</span><span id="mRoutes">0</span>
       </div></div>
+      <div class="metric-card"><h2>SPATIAL DISTRIBUTION</h2><div class="kv">
+        <span class="cite" title="Fraction of world grid cells occupied by at least one bee (excluding dancers fixed in-hive). Spreads under disturbance and hornet defense.">Swarm Coverage</span><span id="mCoverage">0.0%</span>
+        <span>X Mean</span><span id="mXMean">0.0%</span>
+        <span>X Std</span><span id="mXStd">0.0%</span>
+        <span>Y Mean</span><span id="mYMean">0.0%</span>
+        <span>Y Std</span><span id="mYStd">0.0%</span>
+      </div></div>
       <div class="metric-card"><h2>PROGRESS</h2><div class="kv">
         <span>Sim Time</span><span id="mSimTime">00:00:00</span>
         <span>Sim Speed</span><span id="mSimSpeed">1.0×</span>
@@ -239,7 +246,7 @@
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">CURRENT TRANSFER RATE</div><div class="info-i cite" title="Live waggle-channel information throughput over time (bits per second), estimated from active dancers, audience, and decode assumptions.">i</div></div><canvas id="heatNectar"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">WAGGLE ACTIVITY</div><div class="info-i cite" title="Directional dance intensity near the hive; spokes indicate dominant advertised vectors.">i</div></div><canvas id="heatDance"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">OVERALL INFORMATION</div><div class="info-i cite" title="Estimated colony information state over time (bits), based on dance-plus-memory world model content.">i</div></div><canvas id="heatBuzz"></canvas></div>
-        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">LOCAL COHERENCE</div><div class="info-i cite" title="Alignment of nearby bee headings and motion vectors; brighter lines indicate stronger local directional agreement.">i</div></div><canvas id="heatCoherence"></canvas></div>
+        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">SWARM COVERAGE</div><div class="info-i cite" title="Occupancy heatmap of bee positions over the world grid. Gold dot = hive; blue cross = swarm centroid. Coverage and X/Y spread metrics mirror ant-transport style population statistics.">i</div></div><canvas id="heatCoverage"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">ROUTE CONFIDENCE</div><div class="info-i cite" title="Colony confidence in hive-to-resource routes based on repeated successful visits and reinforcement.">i</div></div><canvas id="heatRoutes"></canvas></div>
       </div>
     </section>

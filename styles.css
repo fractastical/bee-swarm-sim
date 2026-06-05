@@ -131,7 +131,7 @@
   .dot.paused { background: var(--red); box-shadow: 0 0 10px rgba(255,106,102,.65); }
 
   .main { grid-column: 2; grid-row: 1 / 3; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; }
-  .metrics { display: grid; grid-template-columns: repeat(6, minmax(150px, 1fr)); overflow: hidden; }
+  .metrics { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); overflow: hidden; }
   .metric-card { padding: 12px 14px; border-right: 1px solid var(--line); min-width: 0; }
   .metric-card:last-child { border-right: 0; }
   .metric-card h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; color: #c9d1df; }
