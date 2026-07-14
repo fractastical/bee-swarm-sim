@@ -466,6 +466,30 @@
       if (e.key.toLowerCase() === 'r') resetSimulation(true);
       if (e.key.toLowerCase() === 'c') clearTrails();
     });
+
+    setupViewToggles();
+  }
+
+  function setupViewToggles() {
+    const appEl = document.querySelector('.app');
+    if (!appEl) return;
+    const toggles = [
+      ['tglControls', 'hide-sidebar'],
+      ['tglMetrics', 'hide-metrics'],
+      ['tglManifold', 'hide-manifold'],
+      ['tglPanels', 'hide-panels'],
+    ];
+    for (const [btnId, cls] of toggles) {
+      const btn = el(btnId);
+      if (!btn) continue;
+      const sync = () => btn.classList.toggle('on', !appEl.classList.contains(cls));
+      sync();
+      btn.onclick = () => { appEl.classList.toggle(cls); sync(); };
+    }
+    const barPause = el('barPause');
+    if (barPause) barPause.onclick = () => setRunning(!state.running);
+    const barReset = el('barReset');
+    if (barReset) barReset.onclick = () => resetSimulation(true);
   }
 
   function setupTooltips() {
@@ -690,6 +714,8 @@
     el('pauseBtn').textContent = v ? 'Pause Simulation' : 'Resume Simulation';
     el('runText').textContent = v ? 'Running' : 'Paused';
     el('runDot').classList.toggle('paused', !v);
+    const barPause = el('barPause');
+    if (barPause) barPause.textContent = v ? '⏸ Pause' : '▶ Play';
   }
 
   function disturbanceProfile() {

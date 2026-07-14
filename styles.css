@@ -262,3 +262,39 @@
     #manifoldPanel { grid-column: 1; grid-row: 2; }
     .bottom { grid-column: 1; grid-row: 3; grid-template-columns: repeat(3,1fr); }
   }
+
+  /* ------- View toolbar (embed-friendly panel toggles) ------- */
+  .viewbar {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    pointer-events: auto; min-width: 0;
+  }
+  .viewbar-label { font-size: 10px; letter-spacing: .08em; color: var(--muted2); text-transform: uppercase; margin: 0 1px 0 2px; }
+  .chip {
+    height: 27px; padding: 4px 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em;
+    color: var(--muted); background: rgba(6, 10, 16, 0.68);
+    border: 1px solid var(--line2); border-radius: 999px;
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    white-space: nowrap;
+  }
+  .chip:hover { border-color: rgba(246,194,58,.5); color: #fff; background: rgba(246,194,58,.10); }
+  .chip.on { color: #fff; border-color: rgba(246,194,58,.6); background: rgba(246,194,58,.16); box-shadow: 0 0 10px rgba(246,194,58,.2); }
+  .chip.primary { color: #fff; border-color: rgba(246,194,58,.42); background: linear-gradient(180deg, rgba(246,194,58,.32), rgba(246,194,58,.12)); }
+  .chip-sep { width: 1px; height: 17px; background: var(--line2); margin: 0 3px; }
+
+  /* ------- Panel visibility toggles -------
+     Removing all hide-* classes restores the original full-dashboard layout. */
+  .app.hide-sidebar { grid-template-columns: minmax(0, 1fr); }
+  .app.hide-sidebar > .sidebar { display: none; }
+  .app.hide-sidebar > .main { grid-column: 1; }
+  .app.hide-sidebar > .footer { grid-column: 1; }
+
+  .app.hide-metrics .metrics { display: none; }
+  .app.hide-metrics .main { grid-template-rows: minmax(0, 1fr); }
+
+  .app.hide-manifold #manifoldPanel { display: none; }
+  .app.hide-manifold .workspace { grid-template-columns: minmax(0, 1fr); }
+  .app.hide-manifold #worldPanel { grid-column: 1; }
+  .app.hide-manifold .bottom { grid-column: 1; grid-row: 2; }
+
+  .app.hide-panels .bottom { display: none; }
+  .app.hide-panels .workspace { grid-template-rows: minmax(0, 1fr); }

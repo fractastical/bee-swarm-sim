@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="app">
+<div class="app hide-sidebar hide-metrics hide-manifold hide-panels">
   <aside class="sidebar">
     <section class="brand">
       <div class="logo" aria-hidden="true"><span class="hex"></span><span class="hex"></span><span class="hex"></span><span class="hex"></span><span class="hex"></span><span class="hex"></span></div>
@@ -213,6 +213,16 @@
       <div id="worldPanel" class="panel">
         <div class="panel-header">
           <div class="panel-title"><span class="yellow-dot"></span>LIVE SWARM VIEW</div>
+          <div class="viewbar">
+            <button id="barPause" class="chip primary" title="Play / pause simulation (space)">⏸ Pause</button>
+            <button id="barReset" class="chip" title="Reset simulation (r)">↻</button>
+            <span class="chip-sep"></span>
+            <span class="viewbar-label">Views:</span>
+            <button id="tglControls" class="chip" title="Show/hide the controls sidebar">Controls</button>
+            <button id="tglMetrics" class="chip" title="Show/hide the metrics bar">Metrics</button>
+            <button id="tglManifold" class="chip" title="Show/hide the communication manifold">Manifold</button>
+            <button id="tglPanels" class="chip" title="Show/hide the mini analysis panels">Panels</button>
+          </div>
           <div class="tools"><button id="hiveZoomBtn" class="toolbtn" title="Toggle hive zoom">⌕</button><button id="hiveZoomInBtn" class="toolbtn" title="Increase hive zoom">＋</button><button id="hiveZoomOutBtn" class="toolbtn" title="Decrease hive zoom">－</button><button id="hiveZoomResetBtn" class="toolbtn" title="Reset hive zoom">⛶</button></div>
         </div>
         <canvas id="world"></canvas>
