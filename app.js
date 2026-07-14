@@ -2248,7 +2248,7 @@
     el('mTremble').textContent = trembleSignals.toLocaleString();
     el('mShaking').textContent = shakeSignals.toLocaleString();
     el('mStop').textContent = stopSignals.toLocaleString();
-    el('mCoherence').textContent = coherence.toFixed(2);
+    document.querySelectorAll('.val-coherence').forEach(n => { n.textContent = coherence.toFixed(2); });
     el('mDirStd').textContent = `${coherenceStats.dirStdDeg.toFixed(1)}°`;
     el('mDistCv').textContent = coherenceStats.distCv.toFixed(2);
     el('mRecSuccess').textContent = attempts ? `${Math.round(succ / attempts * 100)}%` : '—';
