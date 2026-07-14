@@ -101,7 +101,7 @@
   const state = {
     bees: [], flowers: [], time: 0, running: true, delivered: 0, flowerVisits: 0,
     danceHistory: [], recruitEvents: [], efficiencySamples: [], pathSamples: [], deliveryEvents: [],
-    signalEvents: [], infoRateHistory: [], infoBitsHistory: [], coverageHistory: [],
+    signalEvents: [], infoRateHistory: [], infoBitsHistory: [], coverageHistory: [], coherenceHistory: [],
     lastMetrics: 0, lastHeat: 0, fps: 60, lastFrame: performance.now(), contacts: 0,
     tuning: false, tune: { lastTime: 0, rewardAtLast: 0, bestReward: 0, lastMutation: null, phase: 'manual' },
     disturbance: { active: false, type: '', until: 0, intensity: 1, cooldownUntil: 0 },
@@ -115,9 +115,10 @@
   const canvas = {
     world: el('world'), hiveZoom: el('hiveZoom'), manifold: el('manifold'),
     heatPhero: el('heatPhero'), heatNectar: el('heatNectar'), heatDance: el('heatDance'),
-    heatBuzz: el('heatBuzz'), heatCoverage: el('heatCoverage'), heatRoutes: el('heatRoutes')
+    heatBuzz: el('heatBuzz'), heatCoverage: el('heatCoverage'), heatRoutes: el('heatRoutes'),
+    heatCoherence: el('heatCoherence')
   };
-  const ctx = Object.fromEntries(Object.entries(canvas).map(([k, c]) => [k, c.getContext('2d')]));
+  const ctx = Object.fromEntries(Object.entries(canvas).filter(([, c]) => c).map(([k, c]) => [k, c.getContext('2d')]));
   const trails = document.createElement('canvas');
   trails.width = WORLD.w; trails.height = WORLD.h;
   const tctx = trails.getContext('2d');
@@ -238,6 +239,7 @@
     state.infoRateHistory = [];
     state.infoBitsHistory = [];
     state.coverageHistory = [];
+    state.coherenceHistory = [];
     state.disturbance.active = false;
     state.disturbance.type = '';
     state.disturbance.until = 0;
@@ -345,7 +347,7 @@
     state.time = 0; state.delivered = 0; state.flowerVisits = 0;
     state.danceHistory = []; state.recruitEvents = []; state.efficiencySamples = [];
     state.pathSamples = []; state.deliveryEvents = []; state.signalEvents = [];
-    state.infoRateHistory = []; state.infoBitsHistory = []; state.coverageHistory = []; state.contacts = 0;
+    state.infoRateHistory = []; state.infoBitsHistory = []; state.coverageHistory = []; state.coherenceHistory = []; state.contacts = 0;
     state.disturbance.active = false;
     state.disturbance.type = '';
     state.disturbance.until = 0;
@@ -1323,6 +1325,7 @@
     state.infoRateHistory = state.infoRateHistory.filter(e => e.t >= horizon);
     state.infoBitsHistory = state.infoBitsHistory.filter(e => e.t >= horizon);
     state.coverageHistory = state.coverageHistory.filter(e => e.t >= horizon);
+    state.coherenceHistory = state.coherenceHistory.filter(e => e.t >= horizon);
   }
 
   function reward() {
@@ -1912,6 +1915,7 @@
     drawHeatPanel(ctx.heatBuzz, canvas.heatBuzz, 'buzz');
     drawHeatPanel(ctx.heatCoverage, canvas.heatCoverage, 'coverage');
     drawHeatPanel(ctx.heatRoutes, canvas.heatRoutes, 'routes');
+    if (canvas.heatCoherence) drawHeatPanel(ctx.heatCoherence, canvas.heatCoherence, 'coherence');
   }
 
   function drawHeatPanel(c, canv, kind) {
@@ -1924,6 +1928,7 @@
     if (kind === 'nectar') drawNectarMini(c,w,h-12);
     if (kind === 'dance') drawDanceMini(c,w,h-12);
     if (kind === 'buzz') drawBuzzMini(c,w,h-12);
+    if (kind === 'coherence') drawCoherenceMini(c,w,h-12);
     if (kind === 'coverage') drawCoverageMini(c,w,h-12);
     if (kind === 'routes') drawRoutesMini(c,w,h-12);
     c.restore();
@@ -2072,6 +2077,58 @@
     c.fillStyle = 'rgba(216,225,238,.80)';
     c.font = '10px ui-sans-serif, system-ui';
     c.fillText(fmtBits(samples.length ? samples[samples.length - 1].v : 0), 12, 13);
+  }
+  function drawCoherenceMini(c, w, h) {
+    const padX = 12, padY = 8;
+    const chartW = Math.max(1, w - padX * 2);
+    const chartH = Math.max(1, h - padY * 2);
+    const windowSec = 120;
+    const tMin = state.time - windowSec;
+    const samples = state.coherenceHistory.filter(p => p.t >= tMin);
+
+    c.strokeStyle = 'rgba(96,118,148,0.35)';
+    c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = padY + (chartH * i) / 4;
+      c.beginPath(); c.moveTo(padX, y); c.lineTo(padX + chartW, y); c.stroke();
+    }
+    c.strokeStyle = 'rgba(150,175,210,0.5)';
+    c.strokeRect(padX, padY, chartW, chartH);
+
+    if (samples.length >= 2) {
+      c.save();
+      c.beginPath(); c.rect(padX, padY, chartW, chartH); c.clip();
+
+      c.beginPath();
+      for (let i = 0; i < samples.length; i++) {
+        const p = samples[i];
+        const x = padX + ((p.t - tMin) / windowSec) * chartW;
+        const y = padY + chartH - clamp(p.v, 0, 1) * chartH;
+        if (i) c.lineTo(x, y); else c.moveTo(x, y);
+      }
+      const gradient = c.createLinearGradient(0, padY, 0, padY + chartH);
+      gradient.addColorStop(0, 'rgba(88,230,230,0.34)');
+      gradient.addColorStop(1, 'rgba(88,230,230,0.05)');
+      c.lineTo(padX + chartW, padY + chartH);
+      c.lineTo(padX, padY + chartH);
+      c.closePath();
+      c.fillStyle = gradient; c.fill();
+
+      c.beginPath();
+      for (let i = 0; i < samples.length; i++) {
+        const p = samples[i];
+        const x = padX + ((p.t - tMin) / windowSec) * chartW;
+        const y = padY + chartH - clamp(p.v, 0, 1) * chartH;
+        if (i) c.lineTo(x, y); else c.moveTo(x, y);
+      }
+      c.strokeStyle = 'rgba(120,230,230,0.95)';
+      c.lineWidth = 1.8; c.stroke();
+      c.restore();
+    }
+
+    c.fillStyle = 'rgba(216,225,238,.80)';
+    c.font = '10px ui-sans-serif, system-ui';
+    c.fillText((samples.length ? samples[samples.length - 1].v : 0).toFixed(2), 12, 13);
   }
   function drawCoverageMini(c, w, h) {
     const pad = 10;
@@ -2232,6 +2289,7 @@
     recordInfoSample(state.infoBitsHistory, state.time, worldModelBits);
     recordInfoSample(state.infoRateHistory, state.time, transferRateBits);
     recordInfoSample(state.coverageHistory, state.time, state.spatial.coveragePct);
+    recordInfoSample(state.coherenceHistory, state.time, coherence);
 
     el('mTotal').textContent = total.toLocaleString();
     el('mHive').textContent = counts.hive.toLocaleString();
