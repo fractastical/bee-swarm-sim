@@ -474,9 +474,9 @@
     const appEl = document.querySelector('.app');
     if (!appEl) return;
     const toggles = [
+      ['tglSignals', 'hide-signals'],
       ['tglControls', 'hide-sidebar'],
       ['tglMetrics', 'hide-metrics'],
-      ['tglManifold', 'hide-manifold'],
       ['tglPanels', 'hide-panels'],
     ];
     for (const [btnId, cls] of toggles) {
@@ -1515,6 +1515,7 @@
   }
 
   function withWorld(ctx, size, draw) {
+    if (!size || size.w < 2 || size.h < 2) return;
     ctx.save();
     ctx.clearRect(0,0,size.w,size.h);
     const scale = Math.min(size.w / WORLD.w, size.h / WORLD.h);
@@ -1782,6 +1783,7 @@
   }
 
   function drawHiveZoom(c, size) {
+    if (!size || size.w < 2 || size.h < 2) return;
     c.clearRect(0, 0, size.w, size.h);
     const bg = c.createLinearGradient(0, 0, size.w, size.h);
     bg.addColorStop(0, '#090d15');
@@ -1836,6 +1838,7 @@
   }
 
   function drawManifold(c, size) {
+    if (!size || size.w < 2 || size.h < 2) return;
     c.clearRect(0,0,size.w,size.h);
     const w = size.w, h = size.h;
     const bg = c.createLinearGradient(0,0,w,h); bg.addColorStop(0,'#070b12'); bg.addColorStop(1,'#05070a'); c.fillStyle = bg; c.fillRect(0,0,w,h);
@@ -1913,6 +1916,7 @@
 
   function drawHeatPanel(c, canv, kind) {
     const sz = resizeCanvas(canv), w = sz.w, h = sz.h;
+    if (w < 2 || h < 2) return;
     c.clearRect(0,0,w,h);
     const bg = c.createLinearGradient(0,0,w,h); bg.addColorStop(0,'#071019'); bg.addColorStop(1,'#05070a'); c.fillStyle = bg; c.fillRect(0,0,w,h);
     c.save(); c.translate(0, 12);
@@ -2313,7 +2317,8 @@
       if (cfg.engine === 'beestack_trace' && state.trace.active) simulateTrace(rawDt);
       else simulate(rawDt);
     }
-    drawAll(); updateMetrics();
+    try { drawAll(); updateMetrics(); }
+    catch (err) { if (!state._drawErrLogged) { console.error('draw/update error (loop kept alive):', err); state._drawErrLogged = true; } }
     requestAnimationFrame(loop);
   }
 

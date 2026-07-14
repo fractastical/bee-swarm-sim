@@ -131,7 +131,7 @@
   .dot.paused { background: var(--red); box-shadow: 0 0 10px rgba(255,106,102,.65); }
 
   .main { grid-column: 2; grid-row: 1 / 3; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; }
-  .metrics { display: grid; grid-template-columns: repeat(7, minmax(130px, 1fr)); overflow: hidden; }
+  .metrics { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); overflow: hidden; }
   .metric-card { padding: 12px 14px; border-right: 1px solid var(--line); min-width: 0; }
   .metric-card:last-child { border-right: 0; }
   .metric-card h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .08em; color: #c9d1df; }
@@ -142,8 +142,8 @@
 
   .workspace {
     display: grid;
-    grid-template-columns: minmax(520px, 1.35fr) minmax(420px, .85fr);
-    grid-template-rows: minmax(360px, 1fr) 205px;
+    grid-template-columns: minmax(0, 1.55fr) minmax(280px, .82fr);
+    grid-template-rows: minmax(320px, 1fr) 200px;
     gap: 10px;
     min-height: 0;
   }
@@ -218,8 +218,28 @@
   }
 
   #worldPanel { grid-column: 1; grid-row: 1; }
-  #manifoldPanel { grid-column: 2; grid-row: 1; }
-  .bottom { grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 10px; min-height: 0; }
+  #signalRail { grid-column: 2; grid-row: 1; }
+  .bottom { grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 10px; min-height: 0; }
+
+  #signalRail {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-color: #334154 transparent;
+  }
+  .rail-info {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: linear-gradient(180deg, rgba(17, 24, 34, 0.92), rgba(9, 13, 18, 0.94));
+    box-shadow: 0 14px 40px var(--shadow), inset 0 1px 0 rgba(255,255,255,0.03);
+    padding: 12px 14px;
+    flex: none;
+  }
+  .rail-title { font-size: 11px; letter-spacing: .07em; font-weight: 800; color: #f2f5fb; margin-bottom: 9px; display: flex; align-items: center; }
+  .rail-title .yellow-dot { display:inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--gold); box-shadow: 0 0 9px rgba(246,194,58,.8); }
+  .rail-graph { flex: 1 1 130px; min-height: 118px; }
   .smallpanel { min-height: 0; }
   .smallpanel .panel-header { top: 8px; left: 10px; right: 10px; }
   .smallpanel .panel-title { font-size: 10.5px; }
@@ -258,9 +278,11 @@
   @media (max-width: 1200px) {
     .app { grid-template-columns: 252px minmax(0, 1fr); }
     .metrics { grid-template-columns: repeat(3, 1fr); }
-    .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(360px,1fr) 300px 195px; }
-    #manifoldPanel { grid-column: 1; grid-row: 2; }
-    .bottom { grid-column: 1; grid-row: 3; grid-template-columns: repeat(3,1fr); }
+    .workspace { display: block; overflow: auto; }
+    #worldPanel { height: 58vh; min-height: 320px; margin-bottom: 10px; }
+    #signalRail { overflow: visible; margin-bottom: 10px; }
+    .rail-graph { min-height: 150px; }
+    .bottom { display: grid; grid-template-columns: repeat(2, 1fr); grid-auto-rows: 190px; }
   }
 
   /* ------- View toolbar (embed-friendly panel toggles) ------- */
@@ -282,7 +304,8 @@
   .chip-sep { width: 1px; height: 17px; background: var(--line2); margin: 0 3px; }
 
   /* ------- Panel visibility toggles -------
-     Removing all hide-* classes restores the original full-dashboard layout. */
+     Default embed view = live swarm (left) + signal rail (right).
+     Toggling everything on reveals the full dashboard. */
   .app.hide-sidebar { grid-template-columns: minmax(0, 1fr); }
   .app.hide-sidebar > .sidebar { display: none; }
   .app.hide-sidebar > .main { grid-column: 1; }
@@ -291,10 +314,10 @@
   .app.hide-metrics .metrics { display: none; }
   .app.hide-metrics .main { grid-template-rows: minmax(0, 1fr); }
 
-  .app.hide-manifold #manifoldPanel { display: none; }
-  .app.hide-manifold .workspace { grid-template-columns: minmax(0, 1fr); }
-  .app.hide-manifold #worldPanel { grid-column: 1; }
-  .app.hide-manifold .bottom { grid-column: 1; grid-row: 2; }
+  .app.hide-signals #signalRail { display: none; }
+  .app.hide-signals .workspace { grid-template-columns: minmax(0, 1fr); }
+  .app.hide-signals #worldPanel { grid-column: 1; }
+  .app.hide-signals .bottom { grid-column: 1; }
 
   .app.hide-panels .bottom { display: none; }
   .app.hide-panels .workspace { grid-template-rows: minmax(0, 1fr); }

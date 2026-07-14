@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="app hide-sidebar hide-metrics hide-manifold hide-panels">
+<div class="app hide-sidebar hide-metrics hide-panels">
   <aside class="sidebar">
     <section class="brand">
       <div class="logo" aria-hidden="true"><span class="hex"></span><span class="hex"></span><span class="hex"></span><span class="hex"></span><span class="hex"></span><span class="hex"></span></div>
@@ -173,21 +173,6 @@
         <span>Recruitment Success</span><span id="mRecSuccess">0%</span>
         <span>New Recruits / min</span><span id="mRecruits">0.0</span>
       </div></div>
-      <div class="metric-card"><h2>COMMUNICATION</h2><div class="kv">
-        <span class="cite" title="Model used for information estimates: citation-backed uses literature-informed assumptions; heuristic uses hand-tuned approximations.">Info Model</span><span id="mInfoModel">citation-backed</span>
-        <span class="cite" title="Aggregate pheromone/scent coordination index across modeled channels.">Pheromone/Scent</span><span id="mPhero">0.00</span>
-        <span class="cite" title="Orientation-channel analog (Nasonov-like) tracking route and hive-local guidance pressure.">Orientation</span><span id="mPheroOrient">0.00</span>
-        <span class="cite" title="Alarm-channel analog increasing under failed dance recruitment and disruption.">Alarm</span><span id="mPheroAlarm">0.00</span>
-        <span class="cite" title="Queen-channel analog for in-hive social cohesion signal stability.">Queen</span><span id="mPheroQueen">0.00</span>
-        <span class="cite" title="Brood-channel analog linked to forage demand and colony processing load.">Brood</span><span id="mPheroBrood">0.00</span>
-        <span>Harmonic Buzz</span><span id="mBuzz">0.00</span>
-        <span>Dance Activity</span><span id="mDanceActivity">0.00</span>
-        <span>Local Contacts</span><span id="mContacts">0</span>
-        <span class="cite" title="Estimated information content (bits) represented by colony dance+memory state, using Shannon entropy framing (Shannon 1948).">World Model Info</span><span id="mWorldBits">0 b</span>
-        <span class="cite" title="Estimated information transfer throughput from active dance signaling (bits per second), interpreted with Shannon-style payload assumptions (1948+).">Transfer Rate</span><span id="mInfoRate">0 b/s</span>
-        <span class="cite" title="Approximate total state information tracked by this simulation environment (all bee+flower+signal state variables), expressed in bits (Shannon 1948 framing).">Env Data Volume</span><span id="mEnvBits">0 b</span>
-        <span class="cite" title="How many waggle runs would be needed to carry comparable payload, using citation-backed per-run signal assumptions.">Reality Equivalent</span><span id="mRealityEq">0 runs</span>
-      </div></div>
       <div class="metric-card"><h2>NAVIGATION</h2><div class="kv">
         <span>Mean Hive Dist.</span><span id="mHiveDist">0 m</span>
         <span>Mean Path Length</span><span id="mPathLength">0 m</span>
@@ -218,10 +203,10 @@
             <button id="barReset" class="chip" title="Reset simulation (r)">↻</button>
             <span class="chip-sep"></span>
             <span class="viewbar-label">Views:</span>
+            <button id="tglSignals" class="chip on" title="Show/hide the information &amp; signals rail">Signals</button>
             <button id="tglControls" class="chip" title="Show/hide the controls sidebar">Controls</button>
-            <button id="tglMetrics" class="chip" title="Show/hide the metrics bar">Metrics</button>
-            <button id="tglManifold" class="chip" title="Show/hide the communication manifold">Manifold</button>
-            <button id="tglPanels" class="chip" title="Show/hide the mini analysis panels">Panels</button>
+            <button id="tglMetrics" class="chip" title="Show/hide the full metrics bar">Metrics</button>
+            <button id="tglPanels" class="chip" title="Show/hide the manifold &amp; extra analysis panels">Panels</button>
           </div>
           <div class="tools"><button id="hiveZoomBtn" class="toolbtn" title="Toggle hive zoom">⌕</button><button id="hiveZoomInBtn" class="toolbtn" title="Increase hive zoom">＋</button><button id="hiveZoomOutBtn" class="toolbtn" title="Decrease hive zoom">－</button><button id="hiveZoomResetBtn" class="toolbtn" title="Reset hive zoom">⛶</button></div>
         </div>
@@ -243,20 +228,35 @@
         </div>
       </div>
 
-      <div id="manifoldPanel" class="panel">
-        <div class="panel-header">
-          <div class="panel-title"><span class="yellow-dot" style="background:transparent;border:1px solid var(--gold)"></span>COMMUNICATION MANIFOLD</div>
-          <div class="tools"><button class="toolbtn">◇</button><button class="toolbtn">↻</button><button class="toolbtn">⋮</button></div>
+      <aside id="signalRail" class="rail">
+        <div class="rail-info">
+          <div class="rail-title"><span class="yellow-dot"></span>SYSTEM INFORMATION</div>
+          <div class="kv">
+            <span class="cite" title="Model used for information estimates: citation-backed uses literature-informed assumptions; heuristic uses hand-tuned approximations.">Info Model</span><span id="mInfoModel">citation-backed</span>
+            <span class="cite" title="Estimated information content (bits) represented by colony dance+memory state, using Shannon entropy framing (Shannon 1948).">World Model Info</span><span id="mWorldBits">0 b</span>
+            <span class="cite" title="Estimated information transfer throughput from active dance signaling (bits per second), interpreted with Shannon-style payload assumptions (1948+).">Transfer Rate</span><span id="mInfoRate">0 b/s</span>
+            <span class="cite" title="Approximate total state information tracked by this simulation environment (all bee+flower+signal state variables), expressed in bits (Shannon 1948 framing).">Env Data Volume</span><span id="mEnvBits">0 b</span>
+            <span class="cite" title="How many waggle runs would be needed to carry comparable payload, using citation-backed per-run signal assumptions.">Reality Equivalent</span><span id="mRealityEq">0 runs</span>
+            <span class="cite" title="Directional agreement score (resultant length r in circular statistics; Fisher 1993 framework). 1=perfect agreement, 0=dispersed headings.">Dance Coherence</span><span id="mCoherence">0.00</span>
+            <span class="cite" title="Aggregate pheromone/scent coordination index across modeled channels.">Pheromone/Scent</span><span id="mPhero">0.00</span>
+            <span class="cite" title="Orientation-channel analog (Nasonov-like) tracking route and hive-local guidance pressure.">Orientation</span><span id="mPheroOrient">0.00</span>
+            <span class="cite" title="Alarm-channel analog increasing under failed dance recruitment and disruption.">Alarm</span><span id="mPheroAlarm">0.00</span>
+            <span class="cite" title="Queen-channel analog for in-hive social cohesion signal stability.">Queen</span><span id="mPheroQueen">0.00</span>
+            <span class="cite" title="Brood-channel analog linked to forage demand and colony processing load.">Brood</span><span id="mPheroBrood">0.00</span>
+            <span>Harmonic Buzz</span><span id="mBuzz">0.00</span>
+            <span>Dance Activity</span><span id="mDanceActivity">0.00</span>
+            <span>Local Contacts</span><span id="mContacts">0</span>
+          </div>
         </div>
-        <canvas id="manifold"></canvas>
-      </div>
+        <div class="panel smallpanel rail-graph"><div class="panel-header"><div class="panel-title">OVERALL INFORMATION</div><div class="info-i cite" title="Estimated colony information state over time (bits), based on dance-plus-memory world model content.">i</div></div><canvas id="heatBuzz"></canvas></div>
+        <div class="panel smallpanel rail-graph"><div class="panel-header"><div class="panel-title">CURRENT TRANSFER RATE</div><div class="info-i cite" title="Live waggle-channel information throughput over time (bits per second), estimated from active dancers, audience, and decode assumptions.">i</div></div><canvas id="heatNectar"></canvas></div>
+        <div class="panel smallpanel rail-graph"><div class="panel-header"><div class="panel-title">SWARM COVERAGE</div><div class="info-i cite" title="Occupancy heatmap of bee positions over the world grid. Gold dot = hive; blue cross = swarm centroid. Coverage and X/Y spread metrics mirror ant-transport style population statistics.">i</div></div><canvas id="heatCoverage"></canvas></div>
+      </aside>
 
       <div class="bottom">
+        <div id="manifoldPanel" class="panel smallpanel"><div class="panel-header"><div class="panel-title"><span class="yellow-dot" style="background:transparent;border:1px solid var(--gold)"></span>COMMUNICATION MANIFOLD</div><div class="info-i cite" title="Low-dimensional embedding of recent dance memory; colorful strata show how advertised direction/distance vectors cluster over time.">i</div></div><canvas id="manifold"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">PHEROMONE / SCENT</div><div class="info-i cite" title="Synthetic local cue field from flower confidence and hive return traffic; brighter regions indicate stronger orientation cues.">i</div></div><canvas id="heatPhero"></canvas></div>
-        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">CURRENT TRANSFER RATE</div><div class="info-i cite" title="Live waggle-channel information throughput over time (bits per second), estimated from active dancers, audience, and decode assumptions.">i</div></div><canvas id="heatNectar"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">WAGGLE ACTIVITY</div><div class="info-i cite" title="Directional dance intensity near the hive; spokes indicate dominant advertised vectors.">i</div></div><canvas id="heatDance"></canvas></div>
-        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">OVERALL INFORMATION</div><div class="info-i cite" title="Estimated colony information state over time (bits), based on dance-plus-memory world model content.">i</div></div><canvas id="heatBuzz"></canvas></div>
-        <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">SWARM COVERAGE</div><div class="info-i cite" title="Occupancy heatmap of bee positions over the world grid. Gold dot = hive; blue cross = swarm centroid. Coverage and X/Y spread metrics mirror ant-transport style population statistics.">i</div></div><canvas id="heatCoverage"></canvas></div>
         <div class="panel smallpanel"><div class="panel-header"><div class="panel-title">ROUTE CONFIDENCE</div><div class="info-i cite" title="Colony confidence in hive-to-resource routes based on repeated successful visits and reinforcement.">i</div></div><canvas id="heatRoutes"></canvas></div>
       </div>
     </section>
